@@ -1,6 +1,10 @@
 "use client";
 
 import type { Book } from "@/lib/lumi-data";
+import {
+  readSavedReaderPage,
+  saveReaderProgress,
+} from "@/lib/reader-progress";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
@@ -75,16 +79,18 @@ type HTMLFlipBookRef = {
 
 type FlipEvent = { data: unknown };
 
-const EPUB_PAGE_CHAR_LIMIT = 500;
+const EPUB_PAGE_CHAR_LIMIT = 360;
+const EPUB_PAGE_LINE_LIMIT = 13;
+const EPUB_AVERAGE_LINE_CHARS = 40;
 const PDF_MAX_RENDER_EDGE = 1300;
 const PDF_WORKER_SRC = "/pdf.worker.min.mjs";
 const OPEN_BOOK_FRAME = "/open_book.png";
 const OPEN_BOOK_RATIO = 1600 / 1054;
 const OPEN_BOOK_CONTENT = {
-  left: 0.1,
-  top: 0.105,
-  width: 0.8,
-  height: 0.75,
+  left: 0.116,
+  top: 0.12,
+  width: 0.768,
+  height: 0.67,
 };
 
 /* ---------- Helper Functions ---------- */
@@ -156,15 +162,35 @@ function chunkText(text: string, limit = EPUB_PAGE_CHAR_LIMIT) {
   return chunks;
 }
 
+function estimateRenderedLines(text: string) {
+  return text.split("\n").reduce((count, line) => {
+    const normalized = normalizeBookText(line);
+    if (!normalized) return count + 1;
+    return (
+      count +
+      Math.max(1, Math.ceil(normalized.length / EPUB_AVERAGE_LINE_CHARS))
+    );
+  }, 0);
+}
+
 function paginateTextBlocks(blocks: string[], limit = EPUB_PAGE_CHAR_LIMIT) {
   const pages: FlipPageData[] = [];
   let buffer = "";
+  const pushBuffer = () => {
+    const text = buffer.trim();
+    if (!text) return;
+    pages.push({ kind: "text", text, n: pages.length + 1 });
+    buffer = "";
+  };
 
   for (const block of blocks) {
     for (const piece of chunkText(block, limit)) {
       const next = buffer ? `${buffer}\n\n${piece}` : piece;
-      if (buffer && next.length > limit) {
-        pages.push({ kind: "text", text: buffer, n: pages.length + 1 });
+      if (
+        buffer &&
+        (next.length > limit || estimateRenderedLines(next) > EPUB_PAGE_LINE_LIMIT)
+      ) {
+        pushBuffer();
         buffer = piece;
       } else {
         buffer = next;
@@ -172,7 +198,7 @@ function paginateTextBlocks(blocks: string[], limit = EPUB_PAGE_CHAR_LIMIT) {
     }
   }
 
-  if (buffer) pages.push({ kind: "text", text: buffer, n: pages.length + 1 });
+  pushBuffer();
   return pages;
 }
 
@@ -248,7 +274,7 @@ const FlipPage = forwardRef<
         "lumi-open-book-page relative flex h-full w-full flex-col overflow-hidden text-[#2c1810]",
         pg.kind === "image" && "p-0",
         pg.kind === "blank" && "items-center justify-center",
-        pg.kind === "text" && "px-8 sm:px-10",
+        pg.kind === "text" && "px-8 pb-14 pt-6 sm:px-11 sm:pb-16 sm:pt-8",
       )}
       style={{
         backgroundColor: "#f2e1c0",
@@ -279,7 +305,7 @@ const FlipPage = forwardRef<
 
       {/* Số trang */}
       {pageNumber && pg.kind !== "blank" && (
-        <div className="absolute bottom-5 left-0 right-0 text-center z-20">
+        <div className="absolute bottom-3 left-0 right-0 text-center z-20">
           <span className="text-[10px] font-serif tracking-wider text-[#2c1810]/40">
             — {pageNumber} —
           </span>
@@ -297,7 +323,7 @@ const FlipPage = forwardRef<
 
       {/* Image content */}
       {pg.kind === "image" && (
-        <div className="h-full w-full flex items-center justify-center p-6 z-10">
+        <div className="h-full w-full flex items-center justify-center px-8 pb-14 pt-6 sm:px-10 sm:pb-16 sm:pt-8 z-10">
           <img
             src={pg.src}
             alt={pg.alt}
@@ -361,7 +387,11 @@ function BookFlipReader({
   const flipRef = useRef<HTMLFlipBookRef | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(0);
+  const initialPage = useMemo(
+    () => readSavedReaderPage(readerKey, contentTotal),
+    [contentTotal, readerKey],
+  );
+  const [page, setPage] = useState(initialPage);
   const [orientation, setOrientation] = useState<FlipOrientation>("landscape");
   const [size, setSize] = useState({ width: 900, height: 717 });
 
@@ -452,9 +482,12 @@ function BookFlipReader({
   const syncState = useCallback((e: FlipEvent) => {
     const nextPage = getFlipPageIndex(e.data);
     const nextOrientation = getFlipOrientation(e.data);
-    if (nextPage !== null) setPage(nextPage);
+    if (nextPage !== null) {
+      setPage(nextPage);
+      saveReaderProgress(readerKey, nextPage, contentTotal);
+    }
     if (nextOrientation) setOrientation(nextOrientation);
-  }, []);
+  }, [contentTotal, readerKey]);
 
   const flipNext = useCallback(() => {
     flipRef.current?.pageFlip?.()?.flipNext("bottom");
@@ -465,9 +498,11 @@ function BookFlipReader({
   }, []);
 
   useEffect(() => {
-    setPage(0);
+    const savedPage = readSavedReaderPage(readerKey, contentTotal);
+    setPage(savedPage);
     setOrientation("landscape");
-  }, [readerKey]);
+    saveReaderProgress(readerKey, savedPage, contentTotal);
+  }, [contentTotal, readerKey]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -533,7 +568,7 @@ function BookFlipReader({
             minHeight={flipHeight}
             maxHeight={flipHeight}
             size="fixed"
-            startPage={0}
+            startPage={initialPage}
             drawShadow={true}
             flippingTime={800}
             usePortrait={false}
