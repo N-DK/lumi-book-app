@@ -12,6 +12,8 @@ export interface Book {
   kind: BookKind
   /** màu nền bìa (token css hoặc giá trị màu) */
   spine: string
+  /** ảnh bìa đã đọc từ file, dùng data URL để lưu được trong localStorage */
+  coverUrl?: string
   /** object url cho file pdf/epub do người dùng tải lên */
   fileUrl?: string
   /** file gốc để parser đọc ArrayBuffer trên client */
@@ -25,6 +27,7 @@ export interface Track {
   title: string
   artist: string
   url: string
+  coverUrl?: string
 }
 
 export interface Scene {

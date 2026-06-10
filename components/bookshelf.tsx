@@ -29,11 +29,24 @@ export function Bookshelf({ books, onOpen, onImport }: BookshelfProps) {
             className="relative aspect-[2/3] w-full overflow-hidden rounded-r-md rounded-l-sm shadow-lg transition-transform duration-300 group-hover:-translate-y-2 group-hover:shadow-2xl"
             style={{ background: book.spine }}
           >
+            {book.coverUrl && (
+              <img
+                src={book.coverUrl}
+                alt={`Bìa ${book.title}`}
+                className="absolute inset-0 h-full w-full object-cover"
+                draggable={false}
+              />
+            )}
             {/* gáy sách */}
             <span className="absolute inset-y-0 left-0 w-2 bg-black/25" />
             <span className="absolute inset-y-0 left-2 w-px bg-white/15" />
             {/* nội dung bìa */}
-            <div className="flex h-full flex-col justify-between p-3 pl-5 text-left">
+            <div
+              className={cn(
+                "relative z-10 flex h-full flex-col justify-between p-3 pl-5 text-left",
+                book.coverUrl && "bg-gradient-to-b from-black/40 via-transparent to-black/55",
+              )}
+            >
               <span
                 className="font-heading text-sm leading-tight"
                 style={{ color: "oklch(0.88 0.08 85)" }}

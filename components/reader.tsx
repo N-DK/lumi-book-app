@@ -210,6 +210,28 @@ async function readBookArrayBuffer(book: Book) {
   return response.arrayBuffer();
 }
 
+function resolveEpubAssetPath(opfPath: string, href: string) {
+  const cleanHref = href.split("#")[0]?.split("?")[0] ?? href;
+  const baseParts = opfPath.split("/").slice(0, -1);
+  const parts = [...baseParts, ...cleanHref.split("/")];
+  const resolved: string[] = [];
+
+  for (const part of parts) {
+    if (!part || part === ".") continue;
+    if (part === "..") resolved.pop();
+    else resolved.push(part);
+  }
+
+  return resolved.join("/");
+}
+
+function parseEpubDocument(markup: string) {
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(markup, "application/xhtml+xml");
+  if (!xml.querySelector("parsererror")) return xml;
+  return parser.parseFromString(markup, "text/html");
+}
+
 /* ---------- FlipPage với nếp gấp mềm mại, không còn chỉ khâu ngang ---------- */
 const FlipPage = forwardRef<
   HTMLDivElement,
@@ -691,7 +713,6 @@ function EpubReader({ book }: { book: Book }) {
 
   useEffect(() => {
     let cancelled = false;
-    let epubBook: any;
 
     async function init() {
       setPages([]);
@@ -704,13 +725,56 @@ function EpubReader({ book }: { book: Book }) {
       }
 
       try {
-        const ePub = (await import("epubjs")).default;
-        const data = await readBookArrayBuffer(book);
-        epubBook = ePub(data);
-        await epubBook.ready;
+        const JSZip = (await import("jszip")).default;
+        const zip = await JSZip.loadAsync(await readBookArrayBuffer(book));
+        const parser = new DOMParser();
+        const containerXml = await zip
+          .file("META-INF/container.xml")
+          ?.async("text");
+        if (!containerXml) throw new Error("EPUB thiếu container.xml.");
 
-        const sections: any[] = [];
-        epubBook.spine.each((section: any) => sections.push(section));
+        const containerDoc = parser.parseFromString(
+          containerXml,
+          "application/xml",
+        );
+        const opfPath = containerDoc
+          .querySelector("rootfile")
+          ?.getAttribute("full-path");
+        if (!opfPath) throw new Error("Không tìm thấy OPF trong EPUB.");
+
+        const opfXml = await zip.file(opfPath)?.async("text");
+        if (!opfXml) throw new Error("Không đọc được OPF trong EPUB.");
+
+        const opfDoc = parser.parseFromString(opfXml, "application/xml");
+        const manifest = new Map<
+          string,
+          {
+            href: string;
+            mediaType: string | null;
+          }
+        >();
+
+        Array.from(opfDoc.querySelectorAll("item")).forEach((item) => {
+          const id = item.getAttribute("id");
+          const href = item.getAttribute("href");
+          if (!id || !href) return;
+          manifest.set(id, {
+            href,
+            mediaType: item.getAttribute("media-type"),
+          });
+        });
+
+        let sections = Array.from(opfDoc.querySelectorAll("spine itemref"))
+          .map((itemref) => itemref.getAttribute("idref"))
+          .filter((idref): idref is string => Boolean(idref))
+          .map((idref) => manifest.get(idref))
+          .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+        if (sections.length === 0) {
+          sections = Array.from(manifest.values()).filter((item) =>
+            /html|xhtml|xml/i.test(item.mediaType ?? item.href),
+          );
+        }
 
         const blocks: string[] = [];
         for (let i = 0; i < sections.length; i++) {
@@ -718,10 +782,13 @@ function EpubReader({ book }: { book: Book }) {
           setStatus(`Đang dàn trang EPUB ${i + 1} / ${sections.length}...`);
 
           const section = sections[i];
-          const contents = await section.load(epubBook.load.bind(epubBook));
-          const root = section.document ?? contents;
-          blocks.push(...extractTextBlocks(root));
-          section.unload();
+          const sectionPath = resolveEpubAssetPath(opfPath, section.href);
+          const sectionFile =
+            zip.file(sectionPath) ?? zip.file(decodeURIComponent(sectionPath));
+          if (!sectionFile) continue;
+
+          const markup = await sectionFile.async("text");
+          blocks.push(...extractTextBlocks(parseEpubDocument(markup)));
         }
 
         if (!cancelled) {
@@ -740,7 +807,6 @@ function EpubReader({ book }: { book: Book }) {
     void init();
     return () => {
       cancelled = true;
-      epubBook?.destroy?.();
     };
   }, [book]);
 
