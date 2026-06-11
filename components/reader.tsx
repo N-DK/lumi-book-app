@@ -1,5 +1,6 @@
 "use client";
 
+import { ProgressSlider } from "@/components/progress-slider";
 import type { Book } from "@/lib/lumi-data";
 import { cn } from "@/lib/utils";
 import {
@@ -596,7 +597,7 @@ function ReaderFooter({
       className="shrink-0 border-t backdrop-blur-md"
       style={{ borderColor: t.rule }}
     >
-      <div className="flex h-16 items-center gap-4 px-5 sm:px-8">
+      <div className="mx-auto flex h-16 w-full max-w-[1720px] items-center gap-4 px-5 sm:px-8">
         <button
           onClick={onPrev}
           disabled={!canPrev}
@@ -611,16 +612,19 @@ function ReaderFooter({
           <span className="shrink-0 font-mono text-xs tabular-nums">
             {total > 0 ? page + 1 : 0}
           </span>
-          <input
-            type="range"
+          <ProgressSlider
             min={0}
             max={Math.max(0, total - 1)}
             value={clampPage(page, total)}
-            onChange={(e) => onSeek?.(Number(e.target.value))}
+            onChange={(value) => onSeek?.(value)}
+            step={1}
             disabled={!onSeek || total === 0}
-            className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full disabled:cursor-default"
-            style={{ accentColor: t.accent, backgroundColor: t.rule }}
-            aria-label="Tiến độ đọc"
+            className="flex-1"
+            fillColor={t.accent}
+            trackColor={t.rule}
+            thumbColor={t.accent}
+            ariaLabel="Tiến độ đọc"
+            valueLabel={`${percent}%`}
           />
           <span
             className="shrink-0 font-mono text-xs tabular-nums"

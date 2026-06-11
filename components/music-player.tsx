@@ -1,5 +1,6 @@
 "use client";
 
+import { ProgressSlider } from "@/components/progress-slider";
 import type { ApiPlaylist, ApiTrack, TrackPayload } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
@@ -342,18 +343,20 @@ export function MusicPlayer({
             <span className="w-9 shrink-0 text-right text-[10px] tabular-nums text-[#8a744f]">
               {formatTime(progress)}
             </span>
-            <input
-              type="range"
+            <ProgressSlider
               min={0}
               max={duration || 0}
               value={progress}
-              onChange={(e) => {
+              step={1}
+              disabled={!track || duration <= 0}
+              onChange={(value) => {
                 const audio = audioRef.current;
-                if (audio) audio.currentTime = Number(e.target.value);
-                setProgress(Number(e.target.value));
+                if (audio) audio.currentTime = value;
+                setProgress(value);
               }}
-              className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-[#332716] accent-[#d9b98a]"
-              aria-label="Tua bài hát"
+              className="flex-1"
+              ariaLabel="Tua bài hát"
+              valueLabel={`${formatTime(progress)} / ${formatTime(duration)}`}
             />
             <span className="w-9 shrink-0 text-[10px] tabular-nums text-[#8a744f]">
               {formatTime(duration)}
@@ -364,15 +367,15 @@ export function MusicPlayer({
         <div className="flex w-64 shrink-0 items-center justify-end gap-2">
           <div className="hidden items-center gap-2 sm:flex">
             <Volume2 className="size-4 text-[#a3937a]" />
-            <input
-              type="range"
+            <ProgressSlider
               min={0}
               max={1}
               step={0.01}
               value={volume}
-              onChange={(e) => setVolume(Number(e.target.value))}
-              className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-[#332716] accent-[#d9b98a]"
-              aria-label="Âm lượng"
+              onChange={setVolume}
+              className="w-20"
+              ariaLabel="Âm lượng"
+              valueLabel={`${Math.round(volume * 100)}%`}
             />
           </div>
           <button
