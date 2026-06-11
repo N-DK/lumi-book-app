@@ -408,6 +408,23 @@ function TopHeader({
       style={{ left: SIDEBAR_WIDTH, height: HEADER_HEIGHT }}
     >
       <div className="flex h-full min-w-0 items-center gap-4 px-8">
+        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+          <button
+            type="button"
+            className="flex size-10 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#8a744f] shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition hover:border-[#d9b98a]/45 hover:bg-[#2b2115] hover:text-[#d9b98a]"
+            aria-label="Quay lại"
+          >
+            <ChevronLeft className="size-5" />
+          </button>
+          <button
+            type="button"
+            className="flex size-10 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#ecdfc5] shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition hover:border-[#d9b98a]/45 hover:bg-[#2b2115] hover:text-[#d9b98a]"
+            aria-label="Đi tiếp"
+          >
+            <ChevronRight className="size-5" />
+          </button>
+        </div>
+
         <label className="relative min-w-[260px] max-w-xl flex-1">
           <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#d9b98a]" />
           <input
