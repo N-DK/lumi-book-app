@@ -112,8 +112,8 @@ const READER_THEMES: Record<ReaderThemeKey, ReaderTheme> = {
 };
 
 export function Reader({ book, onClose, onProgressChange }: ReaderProps) {
-  const [themeKey, setThemeKey] = useState<ReaderThemeKey>("midnight");
-  const [mode, setMode] = useState<ReaderMode>("scroll");
+  const [themeKey, setThemeKey] = useState<ReaderThemeKey>("sepia");
+  const [mode, setMode] = useState<ReaderMode>("page");
   const [fontSize, setFontSize] = useState(18);
   const [showSettings, setShowSettings] = useState(false);
   const lastPageRef = useRef<number | null>(null);
