@@ -391,6 +391,8 @@ function AppSidebar({
 }
 
 function TopHeader({
+  activeTab,
+  setActiveTab,
   search,
   setSearch,
   searchResults,
@@ -400,6 +402,8 @@ function TopHeader({
   onOpenBook,
   onClearSearch,
 }: {
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   search: string;
   setSearch: (value: string) => void;
   searchResults: Book[];
@@ -412,6 +416,12 @@ function TopHeader({
   const [searchFocused, setSearchFocused] = useState(false);
   const trimmedSearch = search.trim();
   const showSearchPanel = searchFocused && trimmedSearch.length > 0;
+  const activeTabIndex = APP_TABS.indexOf(activeTab);
+  const prevTab = activeTabIndex > 0 ? APP_TABS[activeTabIndex - 1] : null;
+  const nextTab =
+    activeTabIndex >= 0 && activeTabIndex < APP_TABS.length - 1
+      ? APP_TABS[activeTabIndex + 1]
+      : null;
 
   return (
     <header
@@ -422,14 +432,24 @@ function TopHeader({
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
           <button
             type="button"
-            className="flex size-10 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#8a744f] shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition hover:border-[#d9b98a]/45 hover:bg-[#2b2115] hover:text-[#d9b98a]"
+            onClick={() => prevTab && setActiveTab(prevTab)}
+            disabled={!prevTab}
+            className={cn(
+              "flex size-10 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition hover:border-[#d9b98a]/45 hover:bg-[#2b2115] hover:text-[#d9b98a] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[#3a2d1a] disabled:hover:bg-[#241b10]",
+              prevTab ? "text-[#a3937a]" : "text-[#8a744f]",
+            )}
             aria-label="Quay lại"
           >
             <ChevronLeft className="size-5" />
           </button>
           <button
             type="button"
-            className="flex size-10 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#ecdfc5] shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition hover:border-[#d9b98a]/45 hover:bg-[#2b2115] hover:text-[#d9b98a]"
+            onClick={() => nextTab && setActiveTab(nextTab)}
+            disabled={!nextTab}
+            className={cn(
+              "flex size-10 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition hover:border-[#d9b98a]/45 hover:bg-[#2b2115] hover:text-[#d9b98a] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-[#3a2d1a] disabled:hover:bg-[#241b10]",
+              nextTab ? "text-[#ecdfc5]" : "text-[#8a744f]",
+            )}
             aria-label="Đi tiếp"
           >
             <ChevronRight className="size-5" />
@@ -1192,6 +1212,8 @@ export default function Page() {
         user={user}
       />
       <TopHeader
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
         search={search}
         setSearch={setSearch}
         searchResults={searchResults}
