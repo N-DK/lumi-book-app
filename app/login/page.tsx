@@ -27,7 +27,7 @@ function LoginContent() {
 
         {hasGoogleError && (
           <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            Google login không hoàn tất. Kiểm tra OAuth client và callback URL.
+            Đăng nhập chưa hoàn tất. Bạn thử lại sau ít phút nhé.
           </div>
         )}
 

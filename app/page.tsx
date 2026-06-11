@@ -79,7 +79,7 @@ function LoginScreen({ error }: { error?: string | null }) {
           <div>
             <h1 className="font-heading text-3xl tracking-tight">LUMI</h1>
             <p className="text-sm text-muted-foreground">
-              Đăng nhập để đồng bộ sách, tiến độ đọc và playlist.
+              Đăng nhập để lưu kệ sách, tiến độ đọc và playlist.
             </p>
           </div>
         </div>
@@ -103,12 +103,58 @@ function LoginScreen({ error }: { error?: string | null }) {
 
 function LoadingScreen() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background">
-      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        Đang kết nối với server...
+    <main className="flex min-h-screen items-center justify-center bg-[#141009]">
+      <div className="flex items-center gap-3 rounded-2xl border border-[#332716] bg-[#1d160d]/90 px-5 py-4 text-[#d9b98a] shadow-2xl">
+        <span className="flex size-10 items-center justify-center rounded-xl border border-[#3a2d1a] bg-[#241b10]">
+          <Loader2 className="size-5 animate-spin" />
+        </span>
+        <div>
+          <p className="font-heading text-lg leading-none text-[#f0e6d2]">
+            LUMI
+          </p>
+          <p className="mt-1 text-xs text-[#8a744f]">Đang mở thư viện...</p>
+        </div>
       </div>
     </main>
+  );
+}
+
+function TopicSkeleton() {
+  return (
+    <section className="space-y-5" aria-hidden="true">
+      <div className="flex items-center justify-between">
+        <div className="h-7 w-28 animate-pulse rounded-md bg-[#2b2115]" />
+        <div className="flex gap-2">
+          <div className="size-9 animate-pulse rounded-full bg-[#241b10]" />
+          <div className="size-9 animate-pulse rounded-full bg-[#241b10]" />
+        </div>
+      </div>
+      <div className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(190px,1fr)] gap-4 overflow-hidden p-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-24 animate-pulse rounded-xl bg-[#241b10]"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ShelfSkeleton({ count = 10 }: { count?: number }) {
+  return (
+    <div
+      className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+      aria-hidden="true"
+    >
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index} className="animate-pulse">
+          <div className="aspect-[2/3] rounded-lg bg-[#241b10] shadow-lg" />
+          <div className="mt-3 h-3 w-4/5 rounded-full bg-[#2b2115]" />
+          <div className="mt-2 h-2.5 w-1/2 rounded-full bg-[#241b10]" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -225,7 +271,7 @@ function AppSidebar({
         ) : (
           <>
             <p className="mb-3 text-xs leading-tight text-[#8a744f]">
-              Đăng nhập để đồng bộ kệ sách và playlist
+              Đăng nhập để giữ kệ sách và playlist của bạn
             </p>
             <a
               href={getGoogleLoginUrl()}
@@ -752,10 +798,10 @@ export default function Page() {
           : "Kệ sách của tôi";
   const libraryDescription =
     activeTab === "favorites"
-      ? "Playlist cá nhân và các bài nhạc đã lưu trên server."
+      ? "Các bài hát bạn đã thêm vào không gian nghe của mình."
       : activeTab === "recent"
         ? "Sách đang đọc dở và tiến độ đọc gần nhất."
-        : "Sách đã lưu và tiến độ đọc được lấy từ server.";
+        : "Những cuốn sách bạn đã lưu cùng tiến độ đọc của bạn.";
 
   return (
     <div
@@ -801,8 +847,8 @@ export default function Page() {
                   Đăng nhập LUMI
                 </h1>
                 <p className="mt-2 text-sm text-[#b3a285]">
-                  Đăng nhập Google để xem sách, lưu bookmark, đồng bộ tiến độ
-                  đọc và playlist.
+                  Đăng nhập Google để lưu kệ sách, tiến độ đọc và playlist cá
+                  nhân.
                 </p>
                 <a
                   href={getGoogleLoginUrl()}
@@ -828,11 +874,15 @@ export default function Page() {
                 </div>
               )}
 
-              <CategoryTopics
-                categories={categories}
-                category={category}
-                setCategory={setCategory}
-              />
+              {loadingData && categories.length === 0 ? (
+                <TopicSkeleton />
+              ) : (
+                <CategoryTopics
+                  categories={categories}
+                  category={category}
+                  setCategory={setCategory}
+                />
+              )}
 
               <div className="space-y-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -840,10 +890,12 @@ export default function Page() {
                     Được đề xuất cho bạn
                   </h2>
                   <div className="flex items-center gap-3">
-                    {loadingData && (
-                      <span className="flex items-center gap-2 text-xs text-[#8a744f]">
+                    {loadingData && books.length > 0 && (
+                      <span
+                        className="flex size-8 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a]"
+                        aria-label="Đang làm mới danh sách"
+                      >
                         <Loader2 className="size-3.5 animate-spin" />
-                        Đang tải
                       </span>
                     )}
                     <button
@@ -855,13 +907,17 @@ export default function Page() {
                   </div>
                 </div>
 
-                <Bookshelf
-                  books={books}
-                  savedBookIds={savedBookIds}
-                  emptyLabel="Chưa có sách nào."
-                  onOpen={setOpenBook}
-                  onToggleBookmark={handleToggleBookmark}
-                />
+                {loadingData && books.length === 0 ? (
+                  <ShelfSkeleton />
+                ) : (
+                  <Bookshelf
+                    books={books}
+                    savedBookIds={savedBookIds}
+                    emptyLabel="Chưa tìm thấy sách phù hợp."
+                    onOpen={setOpenBook}
+                    onToggleBookmark={handleToggleBookmark}
+                  />
+                )}
               </div>
             </div>
           ) : (
@@ -879,14 +935,18 @@ export default function Page() {
                   </p>
                 </div>
 
-                <Bookshelf
-                  books={libraryBooks}
-                  savedBookIds={savedBookIds}
-                  showProgress
-                  emptyLabel="Bạn chưa lưu sách nào."
-                  onOpen={setOpenBook}
-                  onToggleBookmark={handleToggleBookmark}
-                />
+                {loadingData && libraryBooks.length === 0 ? (
+                  <ShelfSkeleton />
+                ) : (
+                  <Bookshelf
+                    books={libraryBooks}
+                    savedBookIds={savedBookIds}
+                    showProgress
+                    emptyLabel="Bạn chưa lưu sách nào."
+                    onOpen={setOpenBook}
+                    onToggleBookmark={handleToggleBookmark}
+                  />
+                )}
               </section>
             </div>
           )}

@@ -467,7 +467,7 @@ export function MusicPlayer({
               disabled={saving || !draft.title.trim() || !draft.audioUrl.trim()}
               className="rounded-md bg-[#d9b98a] px-3 py-2 text-xs font-medium text-[#241b10] transition hover:brightness-110 disabled:opacity-40"
             >
-              Lưu vào server
+              Lưu bài hát
             </button>
           </div>
         </form>
