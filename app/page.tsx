@@ -83,7 +83,9 @@ function bookMatchesQuery(book: Book, query: string) {
 
   return [book.title, book.author, book.category, ...(book.categories ?? [])]
     .filter(Boolean)
-    .some((value) => normalizeSearchText(value as string).includes(normalizedQuery));
+    .some((value) =>
+      normalizeSearchText(value as string).includes(normalizedQuery),
+    );
 }
 
 function getHighlightedRange(value: string, query: string) {
@@ -500,8 +502,17 @@ function TopHeader({
                 <LogOut className="size-4" />
                 Đăng xuất
               </button>
-              <span className="flex size-10 items-center justify-center rounded-full bg-[#d9b98a] text-sm font-bold text-[#241b10]">
-                {getInitials(user.name)}
+              <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#d9b98a] text-sm font-bold text-[#241b10] ring-1 ring-[#3a2d1a]">
+                {user.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt={user.name}
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  getInitials(user.name)
+                )}
               </span>
             </>
           ) : (
