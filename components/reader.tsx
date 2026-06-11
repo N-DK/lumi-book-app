@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  type CSSProperties,
   forwardRef,
   useCallback,
   useEffect,
@@ -51,6 +52,12 @@ interface ReaderTheme {
   accent: string;
   accentText: string;
   rule: string;
+  pageBg: string;
+  pageText: string;
+  pageMuted: string;
+  pageFold: string;
+  pageFoldSoft: string;
+  imageFilter: string;
 }
 
 const READER_THEMES: Record<ReaderThemeKey, ReaderTheme> = {
@@ -63,6 +70,12 @@ const READER_THEMES: Record<ReaderThemeKey, ReaderTheme> = {
     accent: "#c9a876",
     accentText: "#1a1410",
     rule: "rgba(232,220,196,0.1)",
+    pageBg: "#241b10",
+    pageText: "#e8dcc4",
+    pageMuted: "rgba(232,220,196,0.4)",
+    pageFold: "rgba(217,185,138,0.16)",
+    pageFoldSoft: "rgba(217,185,138,0.05)",
+    imageFilter: "sepia(0.2) brightness(0.78) contrast(1.04)",
   },
   sepia: {
     label: "Giấy ngà",
@@ -73,6 +86,12 @@ const READER_THEMES: Record<ReaderThemeKey, ReaderTheme> = {
     accent: "#8a5a2b",
     accentText: "#f1e4cb",
     rule: "rgba(58,42,28,0.12)",
+    pageBg: "#ead6ac",
+    pageText: "#2a1b10",
+    pageMuted: "rgba(42,27,16,0.4)",
+    pageFold: "rgba(42,27,16,0.2)",
+    pageFoldSoft: "rgba(42,27,16,0.06)",
+    imageFilter: "sepia(0.14) brightness(0.96) contrast(1.02)",
   },
   paper: {
     label: "Trắng",
@@ -83,6 +102,12 @@ const READER_THEMES: Record<ReaderThemeKey, ReaderTheme> = {
     accent: "#a07320",
     accentText: "#fafaf7",
     rule: "rgba(27,27,27,0.1)",
+    pageBg: "#f7f2e8",
+    pageText: "#1f1b15",
+    pageMuted: "rgba(31,27,21,0.4)",
+    pageFold: "rgba(31,27,21,0.14)",
+    pageFoldSoft: "rgba(31,27,21,0.04)",
+    imageFilter: "none",
   },
 };
 
@@ -359,10 +384,10 @@ const PDF_WORKER_SRC = "/pdf.worker.min.mjs";
 const OPEN_BOOK_FRAME = "/open_book.png";
 const OPEN_BOOK_RATIO = 1600 / 1054;
 const OPEN_BOOK_CONTENT = {
-  left: 0.116,
-  top: 0.12,
-  width: 0.768,
-  height: 0.67,
+  left: 0.084,
+  top: 0.072,
+  width: 0.832,
+  height: 0.82,
 };
 
 /* ---------- Helper Functions ---------- */
@@ -466,7 +491,8 @@ function paginateTextBlocks(blocks: string[], limit = EPUB_PAGE_CHAR_LIMIT) {
       const next = buffer ? `${buffer}\n\n${piece}` : piece;
       if (
         buffer &&
-        (next.length > limit || estimateRenderedLines(next) > EPUB_PAGE_LINE_LIMIT)
+        (next.length > limit ||
+          estimateRenderedLines(next) > EPUB_PAGE_LINE_LIMIT)
       ) {
         pushBuffer();
         buffer = piece;
@@ -854,27 +880,31 @@ const FlipPage = forwardRef<
   {
     pg: FlipPageData;
     side: "left" | "right";
+    t: ReaderTheme;
     pageNumber?: number;
   }
->(function FlipPage({ pg, side, pageNumber }, ref) {
+>(function FlipPage({ pg, side, t, pageNumber }, ref) {
   return (
     <div
       ref={ref}
       className={cn(
-        "lumi-open-book-page relative flex h-full w-full flex-col overflow-hidden text-[#2c1810]",
+        "lumi-open-book-page relative flex h-full w-full flex-col overflow-hidden",
         pg.kind === "image" && "p-0",
         pg.kind === "blank" && "items-center justify-center",
         pg.kind === "text" && "px-8 pb-14 pt-6 sm:px-11 sm:pb-16 sm:pt-8",
       )}
-      style={{
-        backgroundColor: "#f2e1c0",
-        color: "#2c1810",
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E")`,
-        boxShadow: `
-          inset ${side === "left" ? "-6px" : "6px"} 0 10px -4px rgba(44, 24, 16, 0.25),
-          inset ${side === "left" ? "-3px" : "3px"} 0 5px -2px rgba(44, 24, 16, 0.12)
+      style={
+        {
+          "--lumi-open-book-page-bg": t.pageBg,
+          color: t.pageText,
+          backgroundColor: t.pageBg,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E")`,
+          boxShadow: `
+          inset ${side === "left" ? "-7px" : "7px"} 0 12px -5px ${t.pageFold},
+          inset ${side === "left" ? "-3px" : "3px"} 0 5px -2px ${t.pageFoldSoft}
         `,
-      }}
+        } as CSSProperties
+      }
     >
       {/* Nếp gấp dọc – gradient mờ dần, không sọc */}
       <div
@@ -885,8 +915,8 @@ const FlipPage = forwardRef<
           background: `
             linear-gradient(
               to ${side === "left" ? "left" : "right"},
-              rgba(44, 24, 16, 0.18) 0%,
-              rgba(44, 24, 16, 0.05) 40%,
+              ${t.pageFold} 0%,
+              ${t.pageFoldSoft} 40%,
               transparent 100%
             )
           `,
@@ -896,7 +926,10 @@ const FlipPage = forwardRef<
       {/* Số trang */}
       {pageNumber && pg.kind !== "blank" && (
         <div className="absolute bottom-3 left-0 right-0 text-center z-20">
-          <span className="text-[10px] font-serif tracking-wider text-[#2c1810]/40">
+          <span
+            className="text-[10px] font-serif tracking-wider"
+            style={{ color: t.pageMuted }}
+          >
             — {pageNumber} —
           </span>
         </div>
@@ -920,7 +953,7 @@ const FlipPage = forwardRef<
             className="max-h-full max-w-full object-contain"
             draggable={false}
             style={{
-              filter: "sepia(0.15) brightness(0.93)",
+              filter: t.imageFilter,
               boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
             }}
           />
@@ -1020,12 +1053,12 @@ function BookFlipReader({
     function calcSize() {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const availableWidth = Math.max(320, rect.width - 64);
-      const availableHeight = Math.max(280, rect.height - 136);
+      const availableWidth = Math.max(320, rect.width - 48);
+      const availableHeight = Math.max(280, rect.height - 96);
       const width = Math.min(
         availableWidth,
         availableHeight * OPEN_BOOK_RATIO,
-        1040,
+        1280,
       );
       const height = width / OPEN_BOOK_RATIO;
 
@@ -1069,15 +1102,18 @@ function BookFlipReader({
     }
   }, []);
 
-  const syncState = useCallback((e: FlipEvent) => {
-    const nextPage = getFlipPageIndex(e.data);
-    const nextOrientation = getFlipOrientation(e.data);
-    if (nextPage !== null) {
-      setPage(nextPage);
-      onProgressChangeRef.current?.(nextPage, contentTotal);
-    }
-    if (nextOrientation) setOrientation(nextOrientation);
-  }, [contentTotal]);
+  const syncState = useCallback(
+    (e: FlipEvent) => {
+      const nextPage = getFlipPageIndex(e.data);
+      const nextOrientation = getFlipOrientation(e.data);
+      if (nextPage !== null) {
+        setPage(nextPage);
+        onProgressChangeRef.current?.(nextPage, contentTotal);
+      }
+      if (nextOrientation) setOrientation(nextOrientation);
+    },
+    [contentTotal],
+  );
 
   const flipNext = useCallback(() => {
     flipRef.current?.pageFlip?.()?.flipNext("bottom");
@@ -1139,26 +1175,33 @@ function BookFlipReader({
   return (
     <div ref={containerRef} className="flex h-full flex-col">
       {/* Book area */}
-      <div className="min-h-0 flex-1 flex items-center justify-center overflow-hidden px-4 py-7 sm:px-8">
+      <div className="min-h-0 flex-1 flex items-center justify-center overflow-hidden px-4 py-4 sm:px-8">
         <div
           className="relative select-none"
-          style={{
-            width: size.width,
-            height: size.height,
-          }}
+          style={
+            {
+              "--lumi-open-book-page-bg": t.pageBg,
+              width: size.width,
+              height: size.height,
+            } as CSSProperties
+          }
         >
           <img
             src={OPEN_BOOK_FRAME}
             alt=""
-            className="pointer-events-none absolute inset-0 z-30 h-full w-full select-none object-contain"
+            className="pointer-events-none absolute inset-0 z-30 h-full w-full select-none object-contain opacity-70"
             draggable={false}
+            style={{
+              filter:
+                "sepia(0.35) saturate(0.85) brightness(0.78) contrast(0.96) drop-shadow(0 18px 34px rgba(0,0,0,0.32))",
+            }}
           />
 
           <HTMLFlipBook
-            key={`${readerKey}-${size.width}-${size.height}`}
+            key={`${readerKey}-${t.pageBg}-${size.width}-${size.height}`}
             ref={flipRef}
-            width={pageWidth}
-            height={flipHeight}
+            width={pageWidth + 10}
+            height={flipHeight + 10}
             minWidth={pageWidth}
             maxWidth={pageWidth}
             minHeight={flipHeight}
@@ -1179,12 +1222,15 @@ function BookFlipReader({
             showPageCorners={false}
             disableFlipByClick={false}
             className="lumi-open-book-flipbook"
-            style={{
-              left: size.width * OPEN_BOOK_CONTENT.left,
-              top: size.height * OPEN_BOOK_CONTENT.top,
-              position: "absolute",
-              zIndex: 10,
-            }}
+            style={
+              {
+                "--lumi-open-book-page-bg": t.pageBg,
+                left: size.width * OPEN_BOOK_CONTENT.left,
+                top: size.height * OPEN_BOOK_CONTENT.top - 10,
+                position: "absolute",
+                zIndex: 10,
+              } as CSSProperties
+            }
             onInit={syncState}
             onUpdate={syncState}
             onChangeOrientation={syncState}
@@ -1198,6 +1244,7 @@ function BookFlipReader({
                 key={`${readerKey}-${pg.kind}-${pg.kind === "blank" ? i : pg.n}`}
                 pg={pg}
                 side={i % 2 === 0 ? "left" : "right"}
+                t={t}
                 pageNumber={pg.kind !== "blank" ? pg.n : undefined}
               />
             ))}
@@ -1222,7 +1269,7 @@ function BookFlipReader({
 
 /* ---------- PDF Reader ---------- */
 function PdfReader(props: ReaderBodyProps) {
-  const { book } = props;
+  const { book, t } = props;
   const [pages, setPages] = useState<FlipPageData[]>([]);
   const [status, setStatus] = useState("Đang mở PDF...");
   const [error, setError] = useState<string | null>(null);
@@ -1276,7 +1323,7 @@ function PdfReader(props: ReaderBodyProps) {
           await pdfPage.render({
             canvasContext: ctx,
             viewport,
-            background: "#f2e1c0",
+            background: t.pageBg,
           }).promise;
 
           renderedPages.push({
@@ -1307,7 +1354,7 @@ function PdfReader(props: ReaderBodyProps) {
       void loadingTask?.destroy?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, book.fileUrl]);
+  }, [book.id, book.fileUrl, t.pageBg]);
 
   if (error) return <ReaderStatus message={error} t={props.t} />;
   if (status) return <ReaderStatus message={status} t={props.t} />;
