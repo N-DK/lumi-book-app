@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import { Bookshelf } from "@/components/bookshelf"
-import { MusicPlayer } from "@/components/music-player"
-import { RainOverlay } from "@/components/rain-overlay"
-import { Reader, type ReaderProgressUpdate } from "@/components/reader"
-import { SpacePanel } from "@/components/space-panel"
+import { Bookshelf } from "@/components/bookshelf";
+import { MusicPlayer } from "@/components/music-player";
+import { RainOverlay } from "@/components/rain-overlay";
+import { Reader, type ReaderProgressUpdate } from "@/components/reader";
+import { SpacePanel } from "@/components/space-panel";
 import {
   ApiError,
   type ApiPlaylist,
@@ -23,11 +23,13 @@ import {
   addTrackToPlaylist,
   toReaderBook,
   type TrackPayload,
-} from "@/lib/api-client"
-import { PRESET_SCENES, type Book } from "@/lib/lumi-data"
-import { cn } from "@/lib/utils"
+} from "@/lib/api-client";
+import { PRESET_SCENES, type Book } from "@/lib/lumi-data";
+import { cn } from "@/lib/utils";
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   Diamond,
   Heart,
@@ -39,29 +41,30 @@ import {
   Moon,
   Search,
   Sparkles,
-} from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type AppTab = "discover" | "for-you" | "me" | "favorites" | "recent"
+type AppTab = "discover" | "for-you" | "me" | "favorites" | "recent";
 
 const DEFAULT_BACKGROUND =
-  PRESET_SCENES.find((scene) => scene.id === "wood")?.css ?? PRESET_SCENES[0].css
-const SIDEBAR_WIDTH = 256
-const HEADER_HEIGHT = 72
-const RIGHT_DOCK_GUTTER = 112
-const PLAYER_HEIGHT = 92
+  PRESET_SCENES.find((scene) => scene.id === "wood")?.css ??
+  PRESET_SCENES[0].css;
+const SIDEBAR_WIDTH = 256;
+const HEADER_HEIGHT = 72;
+const RIGHT_DOCK_GUTTER = 112;
+const PLAYER_HEIGHT = 92;
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) return error.message
-  if (error instanceof Error) return error.message
-  return "Có lỗi xảy ra."
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return "Có lỗi xảy ra.";
 }
 
 function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 0) return "?"
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function LoginScreen({ error }: { error?: string | null }) {
@@ -95,7 +98,7 @@ function LoginScreen({ error }: { error?: string | null }) {
         </a>
       </section>
     </main>
-  )
+  );
 }
 
 function LoadingScreen() {
@@ -106,7 +109,7 @@ function LoadingScreen() {
         Đang kết nối với server...
       </div>
     </main>
-  )
+  );
 }
 
 function SidebarItem({
@@ -115,10 +118,10 @@ function SidebarItem({
   label,
   onClick,
 }: {
-  active?: boolean
-  icon: typeof Compass
-  label: string
-  onClick: () => void
+  active?: boolean;
+  icon: typeof Compass;
+  label: string;
+  onClick: () => void;
 }) {
   return (
     <button
@@ -133,7 +136,7 @@ function SidebarItem({
       <Icon className="size-[18px] shrink-0" />
       <span className="truncate">{label}</span>
     </button>
-  )
+  );
 }
 
 function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
@@ -141,29 +144,18 @@ function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
     <p className="mb-2 px-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
       {children}
     </p>
-  )
+  );
 }
 
 function AppSidebar({
   activeTab,
   setActiveTab,
-  categories,
-  category,
-  setCategory,
   user,
 }: {
-  activeTab: AppTab
-  setActiveTab: (tab: AppTab) => void
-  categories: string[]
-  category: string
-  setCategory: (value: string) => void
-  user: AuthUser | null
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
+  user: AuthUser | null;
 }) {
-  function pickCategory(value: string) {
-    setCategory(value)
-    setActiveTab("discover")
-  }
-
   return (
     <aside
       className="fixed left-0 top-0 z-[80] flex h-screen flex-col overflow-y-auto border-r border-[#2b2115] bg-[#16110a] px-3 py-5 lumi-scroll"
@@ -207,37 +199,6 @@ function AppSidebar({
         </nav>
       </div>
 
-      <div className="mb-7">
-        <SidebarSectionLabel>Chủ đề</SidebarSectionLabel>
-        <div className="space-y-0.5">
-          {[{ value: "all", label: "Tất cả" }, ...categories.map((item) => ({ value: item, label: item }))].map(
-            (item) => {
-              const active = category === item.value
-              return (
-                <button
-                  key={item.value}
-                  onClick={() => pickCategory(item.value)}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-lg px-4 py-1.5 text-left text-[13px] transition",
-                    active
-                      ? "text-[#d9b98a]"
-                      : "text-[#a3937a] hover:text-[#ecdfc5]",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "size-1.5 shrink-0 rounded-full",
-                      active ? "bg-[#d9b98a]" : "bg-[#4a3c26]",
-                    )}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              )
-            },
-          )}
-        </div>
-      </div>
-
       <div className="mb-4">
         <SidebarSectionLabel>Cá nhân</SidebarSectionLabel>
         <nav className="space-y-1">
@@ -276,7 +237,7 @@ function AppSidebar({
         )}
       </div>
     </aside>
-  )
+  );
 }
 
 function TopHeader({
@@ -285,10 +246,10 @@ function TopHeader({
   user,
   onLogout,
 }: {
-  search: string
-  setSearch: (value: string) => void
-  user: AuthUser | null
-  onLogout: () => void
+  search: string;
+  setSearch: (value: string) => void;
+  user: AuthUser | null;
+  onLogout: () => void;
 }) {
   return (
     <header
@@ -332,7 +293,7 @@ function TopHeader({
         </div>
       </div>
     </header>
-  )
+  );
 }
 
 function BookCoverMini({ book }: { book: Book }) {
@@ -365,21 +326,19 @@ function BookCoverMini({ book }: { book: Book }) {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function ContinueReadingHero({
   book,
   onContinue,
 }: {
-  book: Book
-  onContinue: () => void
+  book: Book;
+  onContinue: () => void;
 }) {
-  const progress = book.progress
-  const percent = progress
-    ? Math.min(100, Math.max(0, progress.percent))
-    : 0
-  const pageLabel = progress ? progress.currentPage + 1 : 1
+  const progress = book.progress;
+  const percent = progress ? Math.min(100, Math.max(0, progress.percent)) : 0;
+  const pageLabel = progress ? progress.currentPage + 1 : 1;
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[#332716] bg-gradient-to-br from-[#261c10] via-[#1f160c] to-[#19120a] p-6 sm:p-8">
@@ -420,7 +379,7 @@ function ContinueReadingHero({
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 function StatsCards({
@@ -428,9 +387,9 @@ function StatsCards({
   completedCount,
   onOpenLibrary,
 }: {
-  readingCount: number
-  completedCount: number
-  onOpenLibrary: () => void
+  readingCount: number;
+  completedCount: number;
+  onOpenLibrary: () => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -464,31 +423,154 @@ function StatsCards({
         </button>
       </section>
     </div>
-  )
+  );
+}
+
+const TOPIC_GRADIENTS = [
+  "linear-gradient(120deg, #4b3621 0%, #8a6a45 100%)",
+  "linear-gradient(120deg, #3f4ad9 0%, #7b8cff 100%)",
+  "linear-gradient(120deg, #c9a876 0%, #efe0c3 100%)",
+  "linear-gradient(120deg, #d97b4f 0%, #f0a987 100%)",
+  "linear-gradient(120deg, #2e3a8c 0%, #5a4fcf 100%)",
+  "linear-gradient(120deg, #7a2fa3 0%, #c84fd9 100%)",
+  "linear-gradient(120deg, #2f7fb8 0%, #7cc3ef 100%)",
+  "linear-gradient(120deg, #4f7a55 0%, #8db98a 100%)",
+  "linear-gradient(120deg, #6b3226 0%, #a85a3c 100%)",
+  "linear-gradient(120deg, #b84a7c 0%, #e88aae 100%)",
+  "linear-gradient(120deg, #8a6a1f 0%, #cfa845 100%)",
+  "linear-gradient(120deg, #1f1f1f 0%, #4a4a4a 100%)",
+];
+
+function CategoryTopics({
+  categories,
+  category,
+  setCategory,
+}: {
+  categories: string[];
+  category: string;
+  setCategory: (value: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScroll, setCanScroll] = useState({ left: false, right: false });
+
+  const items = [
+    { value: "all", label: "Tất cả" },
+    ...categories.map((item) => ({ value: item, label: item })),
+  ];
+
+  const updateScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScroll({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+  }, []);
+
+  useEffect(() => {
+    updateScroll();
+    const el = scrollRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(updateScroll);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateScroll, categories.length]);
+
+  function scrollTopics(direction: 1 | -1) {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: "smooth" });
+  }
+
+  return (
+    <section className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-heading text-[26px] leading-none text-[#f0e6d2]">
+          Chủ đề
+        </h2>
+        {(canScroll.left || canScroll.right) && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => scrollTopics(-1)}
+              disabled={!canScroll.left}
+              className="flex size-9 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a] transition hover:bg-[#2b2115] disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Cuộn chủ đề sang trái"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <button
+              onClick={() => scrollTopics(1)}
+              disabled={!canScroll.right}
+              className="flex size-9 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a] transition hover:bg-[#2b2115] disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Cuộn chủ đề sang phải"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+        )}
+      </div>
+      <div
+        ref={scrollRef}
+        onScroll={updateScroll}
+        className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(190px,1fr)] gap-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-4"
+      >
+        {items.map((item, index) => {
+          const active = category === item.value;
+          return (
+            <button
+              key={item.value}
+              onClick={() => setCategory(item.value)}
+              className={cn(
+                "group relative h-24 overflow-hidden rounded-xl p-3 text-left shadow-[0_10px_26px_rgba(0,0,0,0.3)] transition-transform duration-300 hover:-translate-y-1",
+                active &&
+                  "ring-2 ring-[#d9b98a] ring-offset-2 ring-offset-[#141009]",
+              )}
+              style={{
+                background: TOPIC_GRADIENTS[index % TOPIC_GRADIENTS.length],
+              }}
+              aria-pressed={active}
+            >
+              <span className="relative z-10 text-sm font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)]">
+                {item.label}
+              </span>
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute -bottom-5 -right-2 font-heading text-7xl font-bold text-white/[0.14] transition-transform duration-300 group-hover:scale-110"
+              >
+                {item.label.charAt(0).toUpperCase()}
+              </span>
+              <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 export default function Page() {
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [authLoading, setAuthLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<AppTab>("discover")
-  const [books, setBooks] = useState<Book[]>([])
-  const [libraryBooks, setLibraryBooks] = useState<Book[]>([])
-  const [categories, setCategories] = useState<string[]>([])
-  const [playlists, setPlaylists] = useState<ApiPlaylist[]>([])
-  const [search, setSearch] = useState("")
-  const [category, setCategory] = useState("all")
-  const [openBook, setOpenBook] = useState<Book | null>(null)
-  const [loadingData, setLoadingData] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [background, setBackground] = useState(DEFAULT_BACKGROUND)
-  const [dark, setDark] = useState(true)
-  const [rain, setRain] = useState(true)
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<AppTab>("discover");
+  const [books, setBooks] = useState<Book[]>([]);
+  const [libraryBooks, setLibraryBooks] = useState<Book[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [playlists, setPlaylists] = useState<ApiPlaylist[]>([]);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("all");
+  const [openBook, setOpenBook] = useState<Book | null>(null);
+  const [loadingData, setLoadingData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [background, setBackground] = useState(DEFAULT_BACKGROUND);
+  const [dark, setDark] = useState(true);
+  const [rain, setRain] = useState(true);
 
   const savedBookIds = useMemo(
     () => new Set(libraryBooks.map((book) => book.id)),
     [libraryBooks],
-  )
-  const defaultPlaylist = playlists.find((playlist) => playlist.isDefault) ?? playlists[0]
+  );
+  const defaultPlaylist =
+    playlists.find((playlist) => playlist.isDefault) ?? playlists[0];
 
   const continueBook = useMemo(
     () =>
@@ -497,15 +579,17 @@ export default function Page() {
           book.progress &&
           !book.progress.completed &&
           book.progress.currentPage > 0,
-      ) ?? libraryBooks.find((book) => book.progress) ?? null,
+      ) ??
+      libraryBooks.find((book) => book.progress) ??
+      null,
     [libraryBooks],
-  )
+  );
   const readingCount = useMemo(
     () =>
       libraryBooks.filter((book) => book.progress && !book.progress.completed)
         .length,
     [libraryBooks],
-  )
+  );
   const completedCount = useMemo(
     () =>
       libraryBooks.filter(
@@ -514,94 +598,94 @@ export default function Page() {
           (book.progress.completed || book.progress.percent >= 100),
       ).length,
     [libraryBooks],
-  )
+  );
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark)
-  }, [dark])
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
 
   const refreshLibrary = useCallback(async () => {
     const [bookmarkData, playlistData] = await Promise.all([
       listBookmarks(),
       listPlaylists(),
-    ])
-    setLibraryBooks(bookmarkData.books.map(toReaderBook))
-    setPlaylists(playlistData.playlists)
-  }, [])
+    ]);
+    setLibraryBooks(bookmarkData.books.map(toReaderBook));
+    setPlaylists(playlistData.playlists);
+  }, []);
 
   const refreshDiscover = useCallback(async () => {
-    const bookData = await listBooks({ search, category })
-    setBooks(bookData.books.map(toReaderBook))
-  }, [category, search])
+    const bookData = await listBooks({ search, category });
+    setBooks(bookData.books.map(toReaderBook));
+  }, [category, search]);
 
   const refreshAll = useCallback(async () => {
-    setLoadingData(true)
-    setError(null)
+    setLoadingData(true);
+    setError(null);
 
     try {
       const [categoryData] = await Promise.all([
         listCategories(),
         refreshDiscover(),
         refreshLibrary(),
-      ])
-      setCategories(categoryData.categories)
+      ]);
+      setCategories(categoryData.categories);
     } catch (error) {
-      setError(getErrorMessage(error))
+      setError(getErrorMessage(error));
     } finally {
-      setLoadingData(false)
+      setLoadingData(false);
     }
-  }, [refreshDiscover, refreshLibrary])
+  }, [refreshDiscover, refreshLibrary]);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     async function loadUser() {
       try {
-        const data = await getCurrentUser()
-        if (!cancelled) setUser(data.user)
+        const data = await getCurrentUser();
+        if (!cancelled) setUser(data.user);
       } catch (error) {
-        if (!cancelled) setError(getErrorMessage(error))
+        if (!cancelled) setError(getErrorMessage(error));
       } finally {
-        if (!cancelled) setAuthLoading(false)
+        if (!cancelled) setAuthLoading(false);
       }
     }
 
-    void loadUser()
+    void loadUser();
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (!user) return
-    void refreshAll()
-  }, [refreshAll, user])
+    if (!user) return;
+    void refreshAll();
+  }, [refreshAll, user]);
 
   async function handleLogout() {
     try {
-      await logoutUser()
-      setUser(null)
-      setBooks([])
-      setLibraryBooks([])
-      setPlaylists([])
-      setOpenBook(null)
+      await logoutUser();
+      setUser(null);
+      setBooks([]);
+      setLibraryBooks([]);
+      setPlaylists([]);
+      setOpenBook(null);
     } catch (error) {
-      setError(getErrorMessage(error))
+      setError(getErrorMessage(error));
     }
   }
 
   async function handleToggleBookmark(book: Book) {
-    setError(null)
+    setError(null);
 
     try {
       if (savedBookIds.has(book.id)) {
-        await removeBookmark(book.id)
+        await removeBookmark(book.id);
       } else {
-        await saveBookmark(book.id)
+        await saveBookmark(book.id);
       }
-      await Promise.all([refreshDiscover(), refreshLibrary()])
+      await Promise.all([refreshDiscover(), refreshLibrary()]);
     } catch (error) {
-      setError(getErrorMessage(error))
+      setError(getErrorMessage(error));
     }
   }
 
@@ -610,51 +694,53 @@ export default function Page() {
     progress: ReaderProgressUpdate,
   ) {
     try {
-      const data = await saveReadingProgress(book.id, progress)
+      const data = await saveReadingProgress(book.id, progress);
       const applyProgress = (item: Book) =>
-        item.id === book.id ? { ...item, progress: data.progress } : item
+        item.id === book.id ? { ...item, progress: data.progress } : item;
 
-      setBooks((items) => items.map(applyProgress))
-      setLibraryBooks((items) => items.map(applyProgress))
-      setOpenBook((current) => (current?.id === book.id ? applyProgress(current) : current))
+      setBooks((items) => items.map(applyProgress));
+      setLibraryBooks((items) => items.map(applyProgress));
+      setOpenBook((current) =>
+        current?.id === book.id ? applyProgress(current) : current,
+      );
     } catch (error) {
-      console.warn("Không lưu được tiến độ đọc.", error)
+      console.warn("Không lưu được tiến độ đọc.", error);
     }
   }
 
   async function handleAddTrack(payload: TrackPayload) {
-    if (!defaultPlaylist) return
-    setError(null)
+    if (!defaultPlaylist) return;
+    setError(null);
 
     try {
-      const data = await addTrackToPlaylist(defaultPlaylist.id, payload)
+      const data = await addTrackToPlaylist(defaultPlaylist.id, payload);
       setPlaylists((items) =>
         items.map((playlist) =>
           playlist.id === data.playlist.id ? data.playlist : playlist,
         ),
-      )
+      );
     } catch (error) {
-      setError(getErrorMessage(error))
+      setError(getErrorMessage(error));
     }
   }
 
   async function handleRemoveTrack(trackId: string) {
-    if (!defaultPlaylist) return
-    setError(null)
+    if (!defaultPlaylist) return;
+    setError(null);
 
     try {
-      const data = await removeTrackFromPlaylist(defaultPlaylist.id, trackId)
+      const data = await removeTrackFromPlaylist(defaultPlaylist.id, trackId);
       setPlaylists((items) =>
         items.map((playlist) =>
           playlist.id === data.playlist.id ? data.playlist : playlist,
         ),
-      )
+      );
     } catch (error) {
-      setError(getErrorMessage(error))
+      setError(getErrorMessage(error));
     }
   }
 
-  if (authLoading) return <LoadingScreen />
+  if (authLoading) return <LoadingScreen />;
 
   const libraryTitle =
     activeTab === "favorites"
@@ -663,13 +749,13 @@ export default function Page() {
         ? "Đọc gần đây"
         : activeTab === "for-you"
           ? "Dành cho bạn"
-          : "Kệ sách của tôi"
+          : "Kệ sách của tôi";
   const libraryDescription =
     activeTab === "favorites"
       ? "Playlist cá nhân và các bài nhạc đã lưu trên server."
       : activeTab === "recent"
         ? "Sách đang đọc dở và tiến độ đọc gần nhất."
-        : "Sách đã lưu và tiến độ đọc được lấy từ server."
+        : "Sách đã lưu và tiến độ đọc được lấy từ server.";
 
   return (
     <div
@@ -683,9 +769,6 @@ export default function Page() {
       <AppSidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        categories={categories}
-        category={category}
-        setCategory={setCategory}
         user={user}
       />
       <TopHeader
@@ -718,7 +801,8 @@ export default function Page() {
                   Đăng nhập LUMI
                 </h1>
                 <p className="mt-2 text-sm text-[#b3a285]">
-                  Đăng nhập Google để xem sách, lưu bookmark, đồng bộ tiến độ đọc và playlist.
+                  Đăng nhập Google để xem sách, lưu bookmark, đồng bộ tiến độ
+                  đọc và playlist.
                 </p>
                 <a
                   href={getGoogleLoginUrl()}
@@ -744,6 +828,12 @@ export default function Page() {
                 </div>
               )}
 
+              <CategoryTopics
+                categories={categories}
+                category={category}
+                setCategory={setCategory}
+              />
+
               <div className="space-y-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <h2 className="font-heading text-[26px] leading-none text-[#f0e6d2]">
@@ -768,7 +858,7 @@ export default function Page() {
                 <Bookshelf
                   books={books}
                   savedBookIds={savedBookIds}
-                  emptyLabel="Chưa có sách nào. Chạy seed để nhập sachmoi_books.json vào MongoDB."
+                  emptyLabel="Chưa có sách nào."
                   onOpen={setOpenBook}
                   onToggleBookmark={handleToggleBookmark}
                 />
@@ -832,5 +922,5 @@ export default function Page() {
         />
       )}
     </div>
-  )
+  );
 }

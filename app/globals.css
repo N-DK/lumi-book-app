@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Không quét thư mục dữ liệu codegraph (daemon.sock làm Turbopack crash) */
+@source not "../.codegraph";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
