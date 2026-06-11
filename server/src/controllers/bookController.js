@@ -89,6 +89,12 @@ async function attachUserBookState(userId, books) {
 
 const listBooks = asyncHandler(async (req, res) => {
   const { search, category } = req.query;
+  const page = Math.max(Number.parseInt(req.query.page ?? "1", 10) || 1, 1);
+  const requestedLimit = Number.parseInt(req.query.limit ?? "", 10);
+  const limit =
+    Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 60)
+      : 0;
   const filter = {};
 
   if (typeof search === "string" && search.trim()) {
@@ -100,8 +106,19 @@ const listBooks = asyncHandler(async (req, res) => {
     filter.categories = category.trim();
   }
 
-  const books = await Book.find(filter).sort({ published: -1, createdAt: -1 });
-  res.json({ books: await attachUserBookState(req.user?._id, books) });
+  const query = Book.find(filter).sort({ published: -1, createdAt: -1 });
+  if (limit > 0) {
+    query.skip((page - 1) * limit).limit(limit);
+  }
+
+  const [books, total] = await Promise.all([query, Book.countDocuments(filter)]);
+  res.json({
+    books: await attachUserBookState(req.user?._id, books),
+    page,
+    limit: limit || total,
+    total,
+    hasMore: limit > 0 ? page * limit < total : false,
+  });
 });
 
 const getBook = asyncHandler(async (req, res) => {

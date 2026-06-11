@@ -58,6 +58,8 @@ export interface ApiPlaylist {
 export interface BookQuery {
   search?: string
   category?: string
+  page?: number
+  limit?: number
 }
 
 export interface BookPayload {
@@ -232,9 +234,17 @@ export async function listBooks(query: BookQuery = {}) {
   if (query.category && query.category !== "all") {
     params.set("category", query.category)
   }
+  if (query.page) params.set("page", String(query.page))
+  if (query.limit) params.set("limit", String(query.limit))
 
   const suffix = params.toString() ? `?${params.toString()}` : ""
-  return apiFetch<{ books: ApiBook[] }>(`/books${suffix}`)
+  return apiFetch<{
+    books: ApiBook[]
+    page?: number
+    limit?: number
+    total?: number
+    hasMore?: boolean
+  }>(`/books${suffix}`)
 }
 
 export async function listCategories() {

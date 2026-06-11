@@ -54,6 +54,7 @@ const SIDEBAR_WIDTH = 256;
 const HEADER_HEIGHT = 72;
 const RIGHT_DOCK_GUTTER = 112;
 const PLAYER_HEIGHT = 92;
+const RECOMMENDED_PAGE_SIZE = 15;
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;
@@ -797,10 +798,14 @@ export default function Page() {
   const [category, setCategory] = useState("all");
   const [openBook, setOpenBook] = useState<Book | null>(null);
   const [loadingData, setLoadingData] = useState(false);
+  const [loadingMoreBooks, setLoadingMoreBooks] = useState(false);
+  const [recommendedPage, setRecommendedPage] = useState(1);
+  const [hasMoreRecommendedBooks, setHasMoreRecommendedBooks] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [background, setBackground] = useState(DEFAULT_BACKGROUND);
   const [dark, setDark] = useState(true);
   const [rain, setRain] = useState(true);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const savedBookIds = useMemo(
     () => new Set(libraryBooks.map((book) => book.id)),
@@ -850,12 +855,27 @@ export default function Page() {
     setPlaylists(playlistData.playlists);
   }, []);
 
-  const refreshDiscover = useCallback(async () => {
-    const bookData = await listBooks({ category });
-    const mappedBooks = bookData.books.map(toReaderBook);
-    setBooks(mappedBooks);
-    if (category === "all") setAllBooks(mappedBooks);
-  }, [category]);
+  const refreshDiscover = useCallback(
+    async (page = 1, mode: "replace" | "append" = "replace") => {
+      const bookData = await listBooks({
+        category,
+        page,
+        limit: RECOMMENDED_PAGE_SIZE,
+      });
+      const mappedBooks = bookData.books.map(toReaderBook);
+
+      setBooks((currentBooks) => {
+        if (mode === "replace") return mappedBooks;
+
+        const existingIds = new Set(currentBooks.map((book) => book.id));
+        const nextBooks = mappedBooks.filter((book) => !existingIds.has(book.id));
+        return [...currentBooks, ...nextBooks];
+      });
+      setRecommendedPage(bookData.page ?? page);
+      setHasMoreRecommendedBooks(Boolean(bookData.hasMore));
+    },
+    [category],
+  );
 
   const refreshAll = useCallback(async () => {
     setLoadingData(true);
@@ -899,6 +919,52 @@ export default function Page() {
     if (!user) return;
     void refreshAll();
   }, [refreshAll, user]);
+
+  const loadMoreRecommendedBooks = useCallback(async () => {
+    if (
+      !user ||
+      activeTab !== "discover" ||
+      loadingData ||
+      loadingMoreBooks ||
+      !hasMoreRecommendedBooks
+    ) {
+      return;
+    }
+
+    setLoadingMoreBooks(true);
+    try {
+      await refreshDiscover(recommendedPage + 1, "append");
+    } catch (error) {
+      setError(getErrorMessage(error));
+    } finally {
+      setLoadingMoreBooks(false);
+    }
+  }, [
+    activeTab,
+    hasMoreRecommendedBooks,
+    loadingData,
+    loadingMoreBooks,
+    recommendedPage,
+    refreshDiscover,
+    user,
+  ]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || activeTab !== "discover" || !hasMoreRecommendedBooks) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMoreRecommendedBooks();
+        }
+      },
+      { rootMargin: "420px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [activeTab, hasMoreRecommendedBooks, loadMoreRecommendedBooks]);
 
   useEffect(() => {
     const query = search.trim();
@@ -957,6 +1023,7 @@ export default function Page() {
 
   async function handleToggleBookmark(book: Book) {
     setError(null);
+    const nextSaved = !savedBookIds.has(book.id);
 
     try {
       if (savedBookIds.has(book.id)) {
@@ -964,7 +1031,17 @@ export default function Page() {
       } else {
         await saveBookmark(book.id);
       }
-      await Promise.all([refreshDiscover(), refreshLibrary()]);
+      setBooks((items) =>
+        items.map((item) =>
+          item.id === book.id ? { ...item, saved: nextSaved } : item,
+        ),
+      );
+      setAllBooks((items) =>
+        items.map((item) =>
+          item.id === book.id ? { ...item, saved: nextSaved } : item,
+        ),
+      );
+      await refreshLibrary();
     } catch (error) {
       setError(getErrorMessage(error));
     }
@@ -1152,14 +1229,31 @@ export default function Page() {
                 {loadingData && books.length === 0 ? (
                   <ShelfSkeleton />
                 ) : (
-                  <Bookshelf
-                    books={books}
-                    savedBookIds={savedBookIds}
-                    showProgress
-                    emptyLabel="Chưa tìm thấy sách phù hợp."
-                    onOpen={setOpenBook}
-                    onToggleBookmark={handleToggleBookmark}
-                  />
+                  <>
+                    <Bookshelf
+                      books={books}
+                      savedBookIds={savedBookIds}
+                      showProgress
+                      emptyLabel="Chưa tìm thấy sách phù hợp."
+                      onOpen={setOpenBook}
+                      onToggleBookmark={handleToggleBookmark}
+                    />
+                    {hasMoreRecommendedBooks && (
+                      <div
+                        ref={loadMoreRef}
+                        className="flex min-h-16 items-center justify-center"
+                      >
+                        {loadingMoreBooks && (
+                          <span
+                            className="flex size-9 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a]"
+                            aria-label="Đang tải thêm sách"
+                          >
+                            <Loader2 className="size-4 animate-spin" />
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
