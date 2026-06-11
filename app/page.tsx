@@ -1,337 +1,836 @@
-"use client";
+"use client"
 
-import { Bookshelf } from "@/components/bookshelf";
-import { MusicPlayer } from "@/components/music-player";
-import { RainOverlay } from "@/components/rain-overlay";
-import { Reader } from "@/components/reader";
-import { SpacePanel } from "@/components/space-panel";
-import { dataUrlToBlob, getStoredFile, putStoredFile } from "@/lib/file-storage";
-import { PRESET_SCENES, randomSpine, type Book } from "@/lib/lumi-data";
-import { Moon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bookshelf } from "@/components/bookshelf"
+import { MusicPlayer } from "@/components/music-player"
+import { RainOverlay } from "@/components/rain-overlay"
+import { Reader, type ReaderProgressUpdate } from "@/components/reader"
+import { SpacePanel } from "@/components/space-panel"
+import {
+  ApiError,
+  type ApiPlaylist,
+  type AuthUser,
+  getCurrentUser,
+  getGoogleLoginUrl,
+  listBooks,
+  listBookmarks,
+  listCategories,
+  listPlaylists,
+  logoutUser,
+  removeBookmark,
+  removeTrackFromPlaylist,
+  saveBookmark,
+  saveReadingProgress,
+  addTrackToPlaylist,
+  toReaderBook,
+  type TrackPayload,
+} from "@/lib/api-client"
+import { PRESET_SCENES, type Book } from "@/lib/lumi-data"
+import { cn } from "@/lib/utils"
+import {
+  ArrowRight,
+  Compass,
+  Diamond,
+  Heart,
+  History,
+  Library,
+  LogIn,
+  Loader2,
+  LogOut,
+  Moon,
+  Search,
+  Sparkles,
+} from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
-const BOOKS_STORAGE_KEY = "lumi:books:v1";
-const SPACE_STORAGE_KEY = "lumi:space:v1";
+type AppTab = "discover" | "for-you" | "me" | "favorites" | "recent"
 
-type StoredBook = Omit<Book, "chapters" | "file" | "fileUrl"> & {
-  fileUrl?: string;
-};
+const DEFAULT_BACKGROUND =
+  PRESET_SCENES.find((scene) => scene.id === "wood")?.css ?? PRESET_SCENES[0].css
+const SIDEBAR_WIDTH = 256
+const HEADER_HEIGHT = 72
+const RIGHT_DOCK_GUTTER = 112
+const PLAYER_HEIGHT = 92
 
-interface StoredSpace {
-  background: string;
-  dark: boolean;
-  rain: boolean;
+function getErrorMessage(error: unknown) {
+  if (error instanceof ApiError) return error.message
+  if (error instanceof Error) return error.message
+  return "Có lỗi xảy ra."
 }
 
-function readBlobAsDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Không đọc được file."));
-    };
-    reader.onerror = () =>
-      reject(reader.error ?? new Error("Không đọc được file."));
-    reader.readAsDataURL(blob);
-  });
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 0) return "?"
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-function isStoredBook(value: unknown): value is StoredBook {
-  if (!value || typeof value !== "object") return false;
-  const book = value as Partial<StoredBook>;
+function LoginScreen({ error }: { error?: string | null }) {
   return (
-    typeof book.id === "string" &&
-    typeof book.title === "string" &&
-    typeof book.author === "string" &&
-    (book.kind === "pdf" || book.kind === "epub") &&
-    typeof book.spine === "string"
-  );
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,oklch(0.4_0.07_75_/_0.4),transparent_34%),radial-gradient(circle_at_bottom_left,oklch(0.5_0.1_60_/_0.24),transparent_32%)]" />
+      <section className="relative w-full max-w-md rounded-2xl border border-border bg-card/80 p-6 shadow-2xl backdrop-blur">
+        <div className="mb-6 flex items-center gap-3">
+          <span className="flex size-10 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
+            <Moon className="size-5" />
+          </span>
+          <div>
+            <h1 className="font-heading text-3xl tracking-tight">LUMI</h1>
+            <p className="text-sm text-muted-foreground">
+              Đăng nhập để đồng bộ sách, tiến độ đọc và playlist.
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <a
+          href={getGoogleLoginUrl()}
+          className="flex h-11 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+        >
+          Đăng nhập bằng Google
+        </a>
+      </section>
+    </main>
+  )
 }
 
-function bookFileKey(id: string) {
-  return `book:${id}:file`;
+function LoadingScreen() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Đang kết nối với server...
+      </div>
+    </main>
+  )
 }
 
-function bookCoverKey(id: string) {
-  return `book:${id}:cover`;
+function SidebarItem({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active?: boolean
+  icon: typeof Compass
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex h-10 w-full items-center gap-3 rounded-xl px-4 text-left text-[14px] font-medium transition",
+        active
+          ? "bg-[#2b2115] text-[#ecdfc5] shadow-[inset_0_1px_0_rgba(236,223,197,0.06)]"
+          : "text-[#a3937a] hover:bg-[#241b10] hover:text-[#ecdfc5]",
+      )}
+    >
+      <Icon className="size-[18px] shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
+  )
 }
 
-function saveLocalStorageJson(key: string, value: unknown) {
-  localStorage.removeItem(key);
-  localStorage.setItem(key, JSON.stringify(value));
+function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-2 px-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
+      {children}
+    </p>
+  )
 }
 
-async function readEpubCoverBlob(file: File) {
-  try {
-    const JSZip = (await import("jszip")).default;
-    const zip = await JSZip.loadAsync(await file.arrayBuffer());
-    const parser = new DOMParser();
-    const containerXml = await zip
-      .file("META-INF/container.xml")
-      ?.async("text");
-    if (!containerXml) return undefined;
-
-    const containerDoc = parser.parseFromString(containerXml, "application/xml");
-    const opfPath = containerDoc
-      .querySelector("rootfile")
-      ?.getAttribute("full-path");
-    if (!opfPath) return undefined;
-
-    const opfXml = await zip.file(opfPath)?.async("text");
-    if (!opfXml) return undefined;
-
-    const opfDoc = parser.parseFromString(opfXml, "application/xml");
-    const coverItem =
-      opfDoc.querySelector("item[properties~='cover-image']") ??
-      (() => {
-        const coverId = opfDoc
-          .querySelector("meta[name='cover']")
-          ?.getAttribute("content");
-        return coverId
-          ? Array.from(opfDoc.querySelectorAll("item")).find(
-              (item) => item.getAttribute("id") === coverId,
-            ) ?? null
-          : null;
-      })();
-    if (!coverItem) return undefined;
-
-    const coverHref = coverItem?.getAttribute("href");
-    if (!coverHref) return undefined;
-
-    const coverPath = resolveEpubAssetPath(opfPath, coverHref);
-    const coverFile =
-      zip.file(coverPath) ?? zip.file(decodeURIComponent(coverPath));
-    if (!coverFile) return undefined;
-
-    const coverBlob = await coverFile.async("blob");
-    return coverBlob.slice(
-      0,
-      coverBlob.size,
-      coverItem.getAttribute("media-type") ?? "image/*",
-    );
-  } catch (error) {
-    console.warn("Không lấy được bìa EPUB.", error);
-    return undefined;
-  }
-}
-
-function resolveEpubAssetPath(opfPath: string, href: string) {
-  const cleanHref = href.split("#")[0]?.split("?")[0] ?? href;
-  const baseParts = opfPath.split("/").slice(0, -1);
-  const parts = [...baseParts, ...cleanHref.split("/")];
-  const resolved: string[] = [];
-
-  for (const part of parts) {
-    if (!part || part === ".") continue;
-    if (part === "..") resolved.pop();
-    else resolved.push(part);
-  }
-
-  return resolved.join("/");
-}
-
-export default function Page() {
-  const [books, setBooks] = useState<Book[]>([]);
-  const [openBook, setOpenBook] = useState<Book | null>(null);
-  const [background, setBackground] = useState(PRESET_SCENES[0].css);
-  const [dark, setDark] = useState(true);
-  const [rain, setRain] = useState(true);
-  const [storageReady, setStorageReady] = useState(false);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function restore() {
-    try {
-      const savedSpace = localStorage.getItem(SPACE_STORAGE_KEY);
-      if (savedSpace) {
-        const parsed = JSON.parse(savedSpace) as Partial<StoredSpace>;
-        if (typeof parsed.background === "string")
-          setBackground(parsed.background);
-        if (typeof parsed.dark === "boolean") setDark(parsed.dark);
-        if (typeof parsed.rain === "boolean") setRain(parsed.rain);
-      }
-
-      const savedBooks = localStorage.getItem(BOOKS_STORAGE_KEY);
-      if (savedBooks) {
-        const parsed = JSON.parse(savedBooks);
-        if (Array.isArray(parsed)) {
-          const saved = parsed.filter(isStoredBook);
-          const restored = await Promise.all(
-            saved.map(async (book): Promise<Book | null> => {
-              let file: Blob | undefined;
-
-              if (book.fileUrl?.startsWith("data:")) {
-                file = dataUrlToBlob(book.fileUrl);
-                await putStoredFile(bookFileKey(book.id), file);
-              } else {
-                file =
-                  (await getStoredFile(bookFileKey(book.id))) ??
-                  (await getStoredFile(book.id));
-              }
-
-              if (!file) return null;
-
-              let coverUrl = book.coverUrl;
-              if (book.coverUrl?.startsWith("data:")) {
-                const cover = dataUrlToBlob(book.coverUrl);
-                await putStoredFile(bookCoverKey(book.id), cover);
-                coverUrl = URL.createObjectURL(cover);
-              } else {
-                const cover = await getStoredFile(bookCoverKey(book.id));
-                coverUrl = cover ? URL.createObjectURL(cover) : undefined;
-              }
-
-              return {
-                ...book,
-                fileUrl: URL.createObjectURL(file),
-                coverUrl,
-              };
-            }),
-          );
-
-          if (!cancelled) {
-            setBooks(restored.filter((book): book is Book => book !== null));
-          }
-        }
-      }
-    } catch (error) {
-      console.warn("Không khôi phục được dữ liệu đã lưu.", error);
-    } finally {
-      if (!cancelled) setStorageReady(true);
-    }
-
-    }
-
-    void restore();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!storageReady) return;
-    try {
-      const importedBooks: StoredBook[] = books
-        .filter((book) => book.kind !== "sample" && book.fileUrl)
-        .map(
-          ({
-            chapters: _chapters,
-            file: _file,
-            fileUrl: _fileUrl,
-            coverUrl: _coverUrl,
-            ...book
-          }) => book,
-        );
-      saveLocalStorageJson(BOOKS_STORAGE_KEY, importedBooks);
-    } catch (error) {
-      console.warn("Không lưu được sách vào localStorage.", error);
-    }
-  }, [books, storageReady]);
-
-  useEffect(() => {
-    if (!storageReady) return;
-    try {
-      localStorage.setItem(
-        SPACE_STORAGE_KEY,
-        JSON.stringify({ background, dark, rain } satisfies StoredSpace),
-      );
-    } catch (error) {
-      console.warn("Không lưu được không gian đọc vào localStorage.", error);
-    }
-  }, [background, dark, rain, storageReady]);
-
-  async function handleImport(files: FileList | null) {
-    if (!files?.length) return;
-
-    try {
-      const uploadedAt = Date.now();
-      const next: Book[] = await Promise.all(
-        Array.from(files).map(async (f, i) => {
-          const isEpub =
-            f.type === "application/epub+zip" ||
-            f.name.toLowerCase().endsWith(".epub");
-          const id = `${uploadedAt}-${i}`;
-          const [fileUrl, coverBlob] = await Promise.all([
-            Promise.resolve(URL.createObjectURL(f)),
-            isEpub ? readEpubCoverBlob(f) : Promise.resolve(undefined),
-          ]);
-          await putStoredFile(bookFileKey(id), f);
-          if (coverBlob) await putStoredFile(bookCoverKey(id), coverBlob);
-
-          return {
-            id,
-            title: f.name.replace(/\.[^.]+$/, ""),
-            author: "Tủ sách của bạn",
-            kind: isEpub ? "epub" : "pdf",
-            spine: randomSpine(books.length + i),
-            coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : undefined,
-            file: f,
-            fileUrl,
-          };
-        }),
-      );
-
-      setBooks((prev) => [...prev, ...next]);
-    } catch (error) {
-      console.warn("Không import được sách.", error);
-    }
+function AppSidebar({
+  activeTab,
+  setActiveTab,
+  categories,
+  category,
+  setCategory,
+  user,
+}: {
+  activeTab: AppTab
+  setActiveTab: (tab: AppTab) => void
+  categories: string[]
+  category: string
+  setCategory: (value: string) => void
+  user: AuthUser | null
+}) {
+  function pickCategory(value: string) {
+    setCategory(value)
+    setActiveTab("discover")
   }
 
   return (
-    <div className="relative min-h-screen w-full" style={{ background }}>
-      {/* lớp phủ tối để dễ đọc chữ */}
-      <div className="absolute inset-0 bg-background/35" />
-      <RainOverlay enabled={rain} />
-
-      <main className="relative mx-auto flex min-h-screen max-w-7xl flex-col gap-8 px-4 pb-36 pt-8 sm:px-6 lg:flex-row lg:px-8">
-        {/* nội dung chính */}
-        <section className="flex-1">
-          <header className="mb-8 flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-full border border-primary/40 bg-card/60 text-primary backdrop-blur-md">
-              <Moon className="size-5" />
-            </span>
-            <div>
-              <h1 className="font-heading text-3xl tracking-tight text-foreground">
-                LUMI
-              </h1>
-              {/* <p className="text-sm text-muted-foreground">
-                góc đọc ban đêm của bạn
-              </p> */}
-            </div>
-          </header>
-
-          <Bookshelf
-            books={books}
-            onOpen={setOpenBook}
-            onImport={handleImport}
-          />
-        </section>
-
-        {/* thanh bên */}
-        <aside className="flex w-full shrink-0 flex-col gap-5 lg:w-80 fixed right-10 top-[50%] -translate-y-1/2">
-          <SpacePanel
-            background={background}
-            setBackground={setBackground}
-            dark={dark}
-            setDark={setDark}
-            rain={rain}
-            setRain={setRain}
-          />
-        </aside>
-      </main>
-
-      <div className="fixed inset-x-0 bottom-0 z-40 px-3 py-3 sm:px-6">
-        <div className="mx-auto max-w-7xl">
-          <MusicPlayer />
+    <aside
+      className="fixed left-0 top-0 z-[80] flex h-screen flex-col overflow-y-auto border-r border-[#2b2115] bg-[#16110a] px-3 py-5 lumi-scroll"
+      style={{ width: SIDEBAR_WIDTH }}
+    >
+      <div className="mb-7 flex items-center gap-3 px-3">
+        <span className="flex size-10 items-center justify-center rounded-xl border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a] shadow-[0_8px_20px_rgba(0,0,0,0.3)]">
+          <Diamond className="size-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-lg font-bold leading-none tracking-wide text-[#ecdfc5]">
+            LUMI
+          </p>
+          <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
+            Không gian đọc
+          </p>
         </div>
       </div>
 
-      {openBook && <Reader book={openBook} onClose={() => setOpenBook(null)} />}
+      <div className="mb-7">
+        <SidebarSectionLabel>Thư viện</SidebarSectionLabel>
+        <nav className="space-y-1">
+          <SidebarItem
+            active={activeTab === "discover"}
+            icon={Compass}
+            label="Khám phá"
+            onClick={() => setActiveTab("discover")}
+          />
+          <SidebarItem
+            active={activeTab === "for-you"}
+            icon={Sparkles}
+            label="Dành cho bạn"
+            onClick={() => setActiveTab("for-you")}
+          />
+          <SidebarItem
+            active={activeTab === "me"}
+            icon={Library}
+            label="Kệ sách của tôi"
+            onClick={() => setActiveTab("me")}
+          />
+        </nav>
+      </div>
+
+      <div className="mb-7">
+        <SidebarSectionLabel>Chủ đề</SidebarSectionLabel>
+        <div className="space-y-0.5">
+          {[{ value: "all", label: "Tất cả" }, ...categories.map((item) => ({ value: item, label: item }))].map(
+            (item) => {
+              const active = category === item.value
+              return (
+                <button
+                  key={item.value}
+                  onClick={() => pickCategory(item.value)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-4 py-1.5 text-left text-[13px] transition",
+                    active
+                      ? "text-[#d9b98a]"
+                      : "text-[#a3937a] hover:text-[#ecdfc5]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "size-1.5 shrink-0 rounded-full",
+                      active ? "bg-[#d9b98a]" : "bg-[#4a3c26]",
+                    )}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              )
+            },
+          )}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <SidebarSectionLabel>Cá nhân</SidebarSectionLabel>
+        <nav className="space-y-1">
+          <SidebarItem
+            active={activeTab === "favorites"}
+            icon={Heart}
+            label="Nhạc yêu thích"
+            onClick={() => setActiveTab("favorites")}
+          />
+          <SidebarItem
+            active={activeTab === "recent"}
+            icon={History}
+            label="Đọc gần đây"
+            onClick={() => setActiveTab("recent")}
+          />
+        </nav>
+      </div>
+
+      <div className="mt-auto px-3 pt-6">
+        {user ? (
+          <p className="mb-2 text-xs leading-tight text-[#8a744f]">
+            Xin chào, {user.name}
+          </p>
+        ) : (
+          <>
+            <p className="mb-3 text-xs leading-tight text-[#8a744f]">
+              Đăng nhập để đồng bộ kệ sách và playlist
+            </p>
+            <a
+              href={getGoogleLoginUrl()}
+              className="flex h-10 items-center justify-center rounded-xl border border-[#3a2d1a] bg-[#241b10] text-sm font-semibold text-[#d9b98a] transition hover:bg-[#2b2115]"
+            >
+              Đăng nhập
+            </a>
+          </>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+function TopHeader({
+  search,
+  setSearch,
+  user,
+  onLogout,
+}: {
+  search: string
+  setSearch: (value: string) => void
+  user: AuthUser | null
+  onLogout: () => void
+}) {
+  return (
+    <header
+      className="fixed right-0 top-0 z-[70] border-b border-[#2b2115] bg-[#16110a]/[0.92] backdrop-blur"
+      style={{ left: SIDEBAR_WIDTH, height: HEADER_HEIGHT }}
+    >
+      <div className="flex h-full min-w-0 items-center gap-4 px-8">
+        <label className="relative min-w-[260px] max-w-xl flex-1">
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#8a744f]" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-11 w-full rounded-xl border border-[#2e2415] bg-[#1d160d] pl-11 pr-4 text-sm text-[#ecdfc5] outline-none transition placeholder:text-[#8a744f] focus:border-[#d9b98a]/40"
+            placeholder="Tìm sách, tác giả..."
+          />
+        </label>
+
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-4">
+          {user ? (
+            <>
+              <button
+                onClick={onLogout}
+                className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-[#a3937a] transition hover:text-[#ecdfc5]"
+              >
+                <LogOut className="size-4" />
+                Đăng xuất
+              </button>
+              <span className="flex size-10 items-center justify-center rounded-full bg-[#d9b98a] text-sm font-bold text-[#241b10]">
+                {getInitials(user.name)}
+              </span>
+            </>
+          ) : (
+            <a
+              href={getGoogleLoginUrl()}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#d9b98a] px-5 text-sm font-bold text-[#241b10] transition hover:brightness-110"
+            >
+              <LogIn className="size-4" />
+              Đăng nhập
+            </a>
+          )}
+        </div>
+      </div>
+    </header>
+  )
+}
+
+function BookCoverMini({ book }: { book: Book }) {
+  return (
+    <div
+      className="relative aspect-[2/3] w-40 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] shadow-[0_18px_42px_rgba(0,0,0,0.45)]"
+      style={{ background: book.spine }}
+    >
+      {book.coverUrl ? (
+        <img
+          src={book.coverUrl}
+          alt={`Bìa ${book.title}`}
+          className="absolute inset-0 h-full w-full object-cover"
+          draggable={false}
+        />
+      ) : (
+        <div className="flex h-full flex-col items-center justify-between p-4">
+          <div className="flex w-full items-center justify-between">
+            <span className="h-px w-7 bg-[#ecdfc5]/40" />
+            <span className="text-[8px] font-semibold uppercase tracking-[0.3em] text-[#ecdfc5]/60">
+              Lumi
+            </span>
+          </div>
+          <span className="line-clamp-4 text-center font-heading text-sm leading-snug text-[#f0e6d2]">
+            {book.title}
+          </span>
+          <span className="line-clamp-1 text-[9px] uppercase tracking-[0.22em] text-[#ecdfc5]/55">
+            {book.author}
+          </span>
+        </div>
+      )}
     </div>
-  );
+  )
+}
+
+function ContinueReadingHero({
+  book,
+  onContinue,
+}: {
+  book: Book
+  onContinue: () => void
+}) {
+  const progress = book.progress
+  const percent = progress
+    ? Math.min(100, Math.max(0, progress.percent))
+    : 0
+  const pageLabel = progress ? progress.currentPage + 1 : 1
+
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-[#332716] bg-gradient-to-br from-[#261c10] via-[#1f160c] to-[#19120a] p-6 sm:p-8">
+      <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-[#d9b98a]/[0.05]" />
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
+        <BookCoverMini book={book} />
+        <div className="min-w-0 flex-1">
+          <span className="inline-flex items-center rounded-full border border-[#d9b98a]/30 bg-[#d9b98a]/[0.08] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#d9b98a]">
+            Đang đọc tiếp
+          </span>
+          <h2 className="mt-4 font-heading text-3xl leading-tight text-[#f0e6d2] sm:text-4xl">
+            {book.title}
+          </h2>
+          {book.description && (
+            <p className="mt-3 line-clamp-2 max-w-xl text-sm leading-relaxed text-[#b3a285]">
+              {book.description}
+            </p>
+          )}
+          <div className="mt-6 flex flex-wrap items-center gap-4">
+            <button
+              onClick={onContinue}
+              className="inline-flex h-11 items-center rounded-xl border border-[#d9b98a]/40 bg-[#d9b98a]/[0.1] px-5 text-sm font-semibold text-[#e8cf9f] transition hover:bg-[#d9b98a]/[0.18]"
+            >
+              Tiếp tục — Trang {pageLabel}
+            </button>
+            <div className="flex min-w-[180px] flex-1 items-center gap-3">
+              <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[#332716]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#a8895c] to-[#d9b98a] transition-all duration-500"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <span className="shrink-0 text-xs tabular-nums text-[#b3a285]">
+                {percent}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function StatsCards({
+  readingCount,
+  completedCount,
+  onOpenLibrary,
+}: {
+  readingCount: number
+  completedCount: number
+  onOpenLibrary: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-5">
+      <section className="rounded-2xl border border-[#332716] bg-[#1d160d] p-6">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
+          Đang đọc
+        </p>
+        <p className="mt-3 font-heading text-4xl text-[#f0e6d2]">
+          {readingCount} sách
+        </p>
+        <p className="mt-2 text-xs text-[#b3a285]">
+          {completedCount} cuốn đã đọc xong
+        </p>
+      </section>
+
+      <section className="flex flex-1 items-center justify-between gap-4 rounded-2xl border border-[#332716] bg-[#1d160d] p-6">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
+            Bộ sưu tập
+          </p>
+          <p className="mt-2 truncate font-heading text-xl text-[#f0e6d2]">
+            Kệ sách của tôi
+          </p>
+        </div>
+        <button
+          onClick={onOpenLibrary}
+          className="flex size-11 shrink-0 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a] transition hover:bg-[#2b2115]"
+          aria-label="Mở kệ sách của tôi"
+        >
+          <ArrowRight className="size-5" />
+        </button>
+      </section>
+    </div>
+  )
+}
+
+export default function Page() {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<AppTab>("discover")
+  const [books, setBooks] = useState<Book[]>([])
+  const [libraryBooks, setLibraryBooks] = useState<Book[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [playlists, setPlaylists] = useState<ApiPlaylist[]>([])
+  const [search, setSearch] = useState("")
+  const [category, setCategory] = useState("all")
+  const [openBook, setOpenBook] = useState<Book | null>(null)
+  const [loadingData, setLoadingData] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [background, setBackground] = useState(DEFAULT_BACKGROUND)
+  const [dark, setDark] = useState(true)
+  const [rain, setRain] = useState(true)
+
+  const savedBookIds = useMemo(
+    () => new Set(libraryBooks.map((book) => book.id)),
+    [libraryBooks],
+  )
+  const defaultPlaylist = playlists.find((playlist) => playlist.isDefault) ?? playlists[0]
+
+  const continueBook = useMemo(
+    () =>
+      libraryBooks.find(
+        (book) =>
+          book.progress &&
+          !book.progress.completed &&
+          book.progress.currentPage > 0,
+      ) ?? libraryBooks.find((book) => book.progress) ?? null,
+    [libraryBooks],
+  )
+  const readingCount = useMemo(
+    () =>
+      libraryBooks.filter((book) => book.progress && !book.progress.completed)
+        .length,
+    [libraryBooks],
+  )
+  const completedCount = useMemo(
+    () =>
+      libraryBooks.filter(
+        (book) =>
+          book.progress &&
+          (book.progress.completed || book.progress.percent >= 100),
+      ).length,
+    [libraryBooks],
+  )
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark)
+  }, [dark])
+
+  const refreshLibrary = useCallback(async () => {
+    const [bookmarkData, playlistData] = await Promise.all([
+      listBookmarks(),
+      listPlaylists(),
+    ])
+    setLibraryBooks(bookmarkData.books.map(toReaderBook))
+    setPlaylists(playlistData.playlists)
+  }, [])
+
+  const refreshDiscover = useCallback(async () => {
+    const bookData = await listBooks({ search, category })
+    setBooks(bookData.books.map(toReaderBook))
+  }, [category, search])
+
+  const refreshAll = useCallback(async () => {
+    setLoadingData(true)
+    setError(null)
+
+    try {
+      const [categoryData] = await Promise.all([
+        listCategories(),
+        refreshDiscover(),
+        refreshLibrary(),
+      ])
+      setCategories(categoryData.categories)
+    } catch (error) {
+      setError(getErrorMessage(error))
+    } finally {
+      setLoadingData(false)
+    }
+  }, [refreshDiscover, refreshLibrary])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadUser() {
+      try {
+        const data = await getCurrentUser()
+        if (!cancelled) setUser(data.user)
+      } catch (error) {
+        if (!cancelled) setError(getErrorMessage(error))
+      } finally {
+        if (!cancelled) setAuthLoading(false)
+      }
+    }
+
+    void loadUser()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    void refreshAll()
+  }, [refreshAll, user])
+
+  async function handleLogout() {
+    try {
+      await logoutUser()
+      setUser(null)
+      setBooks([])
+      setLibraryBooks([])
+      setPlaylists([])
+      setOpenBook(null)
+    } catch (error) {
+      setError(getErrorMessage(error))
+    }
+  }
+
+  async function handleToggleBookmark(book: Book) {
+    setError(null)
+
+    try {
+      if (savedBookIds.has(book.id)) {
+        await removeBookmark(book.id)
+      } else {
+        await saveBookmark(book.id)
+      }
+      await Promise.all([refreshDiscover(), refreshLibrary()])
+    } catch (error) {
+      setError(getErrorMessage(error))
+    }
+  }
+
+  async function handleProgressChange(
+    book: Book,
+    progress: ReaderProgressUpdate,
+  ) {
+    try {
+      const data = await saveReadingProgress(book.id, progress)
+      const applyProgress = (item: Book) =>
+        item.id === book.id ? { ...item, progress: data.progress } : item
+
+      setBooks((items) => items.map(applyProgress))
+      setLibraryBooks((items) => items.map(applyProgress))
+      setOpenBook((current) => (current?.id === book.id ? applyProgress(current) : current))
+    } catch (error) {
+      console.warn("Không lưu được tiến độ đọc.", error)
+    }
+  }
+
+  async function handleAddTrack(payload: TrackPayload) {
+    if (!defaultPlaylist) return
+    setError(null)
+
+    try {
+      const data = await addTrackToPlaylist(defaultPlaylist.id, payload)
+      setPlaylists((items) =>
+        items.map((playlist) =>
+          playlist.id === data.playlist.id ? data.playlist : playlist,
+        ),
+      )
+    } catch (error) {
+      setError(getErrorMessage(error))
+    }
+  }
+
+  async function handleRemoveTrack(trackId: string) {
+    if (!defaultPlaylist) return
+    setError(null)
+
+    try {
+      const data = await removeTrackFromPlaylist(defaultPlaylist.id, trackId)
+      setPlaylists((items) =>
+        items.map((playlist) =>
+          playlist.id === data.playlist.id ? data.playlist : playlist,
+        ),
+      )
+    } catch (error) {
+      setError(getErrorMessage(error))
+    }
+  }
+
+  if (authLoading) return <LoadingScreen />
+
+  const libraryTitle =
+    activeTab === "favorites"
+      ? "Nhạc yêu thích"
+      : activeTab === "recent"
+        ? "Đọc gần đây"
+        : activeTab === "for-you"
+          ? "Dành cho bạn"
+          : "Kệ sách của tôi"
+  const libraryDescription =
+    activeTab === "favorites"
+      ? "Playlist cá nhân và các bài nhạc đã lưu trên server."
+      : activeTab === "recent"
+        ? "Sách đang đọc dở và tiến độ đọc gần nhất."
+        : "Sách đã lưu và tiến độ đọc được lấy từ server."
+
+  return (
+    <div
+      className="relative min-h-screen w-full overflow-x-hidden bg-[#141009]"
+      style={{ background }}
+    >
+      <div className="fixed inset-0 bg-[#120d07]/[0.84]" />
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_75%_0%,rgba(217,185,138,0.06),transparent_30%)]" />
+      <RainOverlay enabled={rain} />
+
+      <AppSidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        categories={categories}
+        category={category}
+        setCategory={setCategory}
+        user={user}
+      />
+      <TopHeader
+        search={search}
+        setSearch={setSearch}
+        user={user}
+        onLogout={handleLogout}
+      />
+
+      <main
+        className="relative min-h-screen px-8"
+        style={{
+          marginLeft: SIDEBAR_WIDTH,
+          paddingTop: HEADER_HEIGHT + 32,
+          paddingRight: RIGHT_DOCK_GUTTER,
+          paddingBottom: PLAYER_HEIGHT + 48,
+        }}
+      >
+        <div className="w-full max-w-[1480px]">
+          {error && (
+            <div className="mb-5 rounded-md border border-red-300/20 bg-red-950/35 px-4 py-3 text-sm text-red-100">
+              {error}
+            </div>
+          )}
+
+          {!user ? (
+            <section className="flex min-h-[calc(100vh-280px)] items-center justify-center">
+              <div className="w-full max-w-md rounded-2xl border border-[#332716] bg-[#1d160d]/90 p-6 text-center shadow-2xl backdrop-blur">
+                <h1 className="font-heading text-3xl text-[#f0e6d2]">
+                  Đăng nhập LUMI
+                </h1>
+                <p className="mt-2 text-sm text-[#b3a285]">
+                  Đăng nhập Google để xem sách, lưu bookmark, đồng bộ tiến độ đọc và playlist.
+                </p>
+                <a
+                  href={getGoogleLoginUrl()}
+                  className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-[#d9b98a] px-7 text-sm font-bold text-[#241b10] transition hover:brightness-110"
+                >
+                  Đăng nhập
+                </a>
+              </div>
+            </section>
+          ) : activeTab === "discover" ? (
+            <div className="space-y-9">
+              {continueBook && (
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+                  <ContinueReadingHero
+                    book={continueBook}
+                    onContinue={() => setOpenBook(continueBook)}
+                  />
+                  <StatsCards
+                    readingCount={readingCount}
+                    completedCount={completedCount}
+                    onOpenLibrary={() => setActiveTab("me")}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <h2 className="font-heading text-[26px] leading-none text-[#f0e6d2]">
+                    Được đề xuất cho bạn
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    {loadingData && (
+                      <span className="flex items-center gap-2 text-xs text-[#8a744f]">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Đang tải
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setCategory("all")}
+                      className="text-sm text-[#d9b98a] transition hover:text-[#e8cf9f]"
+                    >
+                      Xem tất cả
+                    </button>
+                  </div>
+                </div>
+
+                <Bookshelf
+                  books={books}
+                  savedBookIds={savedBookIds}
+                  emptyLabel="Chưa có sách nào. Chạy seed để nhập sachmoi_books.json vào MongoDB."
+                  onOpen={setOpenBook}
+                  onToggleBookmark={handleToggleBookmark}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <section className="space-y-6">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
+                    Thư viện
+                  </p>
+                  <h2 className="mt-2 font-heading text-[32px] leading-none text-[#f0e6d2]">
+                    {libraryTitle}
+                  </h2>
+                  <p className="mt-3 text-sm text-[#b3a285]">
+                    {libraryDescription}
+                  </p>
+                </div>
+
+                <Bookshelf
+                  books={libraryBooks}
+                  savedBookIds={savedBookIds}
+                  showProgress
+                  emptyLabel="Bạn chưa lưu sách nào."
+                  onOpen={setOpenBook}
+                  onToggleBookmark={handleToggleBookmark}
+                />
+              </section>
+            </div>
+          )}
+        </div>
+      </main>
+
+      <aside className="fixed right-6 top-1/2 z-[95] -translate-y-1/2">
+        <SpacePanel
+          background={background}
+          setBackground={setBackground}
+          dark={dark}
+          setDark={setDark}
+          rain={rain}
+          setRain={setRain}
+        />
+      </aside>
+
+      {user && (
+        <div className="fixed inset-x-0 bottom-0 z-[85]">
+          <MusicPlayer
+            playlist={defaultPlaylist}
+            onAddTrack={handleAddTrack}
+            onRemoveTrack={handleRemoveTrack}
+          />
+        </div>
+      )}
+
+      {openBook && (
+        <Reader
+          book={openBook}
+          onClose={() => setOpenBook(null)}
+          onProgressChange={handleProgressChange}
+        />
+      )}
+    </div>
+  )
 }

@@ -5,21 +5,35 @@ export interface SampleChapter {
   paragraphs: string[]
 }
 
+export interface ReadingProgress {
+  id?: string
+  currentPage: number
+  totalPages: number
+  currentChapter?: string
+  currentCfi?: string
+  percent: number
+  completed?: boolean
+}
+
 export interface Book {
   id: string
   title: string
   author: string
   kind: BookKind
-  /** màu nền bìa (token css hoặc giá trị màu) */
+  slug?: string
+  description?: string
+  category?: string
+  categories?: string[]
+  published?: string
   spine: string
-  /** ảnh bìa đã đọc từ file, dùng data URL để lưu được trong localStorage */
   coverUrl?: string
-  /** object url cho file pdf/epub do người dùng tải lên */
+  sourceUrl?: string
+  pdfUrl?: string
+  epubUrl?: string
   fileUrl?: string
-  /** file gốc để parser đọc ArrayBuffer trên client */
-  file?: File
-  /** nội dung cho sách mẫu */
   chapters?: SampleChapter[]
+  saved?: boolean
+  progress?: ReadingProgress | null
 }
 
 export interface Track {
@@ -27,18 +41,22 @@ export interface Track {
   title: string
   artist: string
   url: string
+  audioUrl?: string
   coverUrl?: string
 }
 
 export interface Scene {
   id: string
   name: string
-  /** css background value */
   css: string
 }
 
-/** Cảnh nền gradient/SVG dựng sẵn (mặc định) */
 export const PRESET_SCENES: Scene[] = [
+  {
+    id: "wood",
+    name: "Gỗ đêm",
+    css: "linear-gradient(180deg, oklch(0.2 0.025 75) 0%, oklch(0.15 0.018 70) 100%)",
+  },
   {
     id: "midnight",
     name: "Đêm tím",
@@ -84,7 +102,6 @@ export function randomSpine(seed: number) {
   return SPINES[seed % SPINES.length]
 }
 
-/** Sách mẫu đọc được ngay, dạng hai trang giấy lật */
 export const SAMPLE_BOOKS: Book[] = [
   {
     id: "sample-lofi",

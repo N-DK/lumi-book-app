@@ -72,9 +72,9 @@ export function SpacePanel({
   }
 
   return (
-    <div className="relative flex w-full justify-center lg:justify-end">
+    <div className="relative z-[90] flex justify-end">
       {activePanel && (
-        <div className="absolute right-20 top-2 z-20 w-72 rounded-2xl border border-white/10 bg-black/80 p-3 text-white shadow-2xl backdrop-blur-xl">
+        <div className="absolute right-[76px] top-1/2 z-[95] w-72 -translate-y-1/2 rounded-lg border border-[#f1c36f]/20 bg-[#17100d]/95 p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.58)] backdrop-blur-xl">
           {(activePanel === "settings" || activePanel === "scenes") && (
             <div className="grid grid-cols-3 gap-2">
               {PRESET_SCENES.map((scene) => {
@@ -140,8 +140,8 @@ export function SpacePanel({
                 onClick={() => setDark(!dark)}
                 className={cn(
                   "flex items-center justify-center gap-2 rounded-full border py-2 text-xs transition",
-                  dark
-                    ? "border-[#e8c98d]/45 bg-[#e8c98d]/12 text-[#f5ddb0]"
+                    dark
+                    ? "border-[#e8c98d]/45 bg-[#e8c98d]/[0.12] text-[#f5ddb0]"
                     : "border-white/10 bg-white/[0.04] text-white/65 hover:text-white",
                 )}
                 aria-label="Đổi chế độ sáng tối"
@@ -156,8 +156,8 @@ export function SpacePanel({
                 onClick={() => setRain(!rain)}
                 className={cn(
                   "flex items-center justify-center gap-2 rounded-full border py-2 text-xs transition",
-                  rain
-                    ? "border-[#9ec6ff]/45 bg-[#9ec6ff]/12 text-[#cfe2ff]"
+                    rain
+                    ? "border-[#9ec6ff]/45 bg-[#9ec6ff]/[0.12] text-[#cfe2ff]"
                     : "border-white/10 bg-white/[0.04] text-white/65 hover:text-white",
                 )}
                 aria-label="Bật tắt hiệu ứng mưa"
@@ -170,12 +170,12 @@ export function SpacePanel({
         </div>
       )}
 
-      <div className="flex w-16 flex-col items-center rounded-full bg-black/30 px-2 py-6 shadow-[0_18px_45px_rgba(0,0,0,0.38)] ring-1 ring-white/[0.08] backdrop-blur-md">
+      <div className="flex w-[64px] flex-col items-center rounded-[32px] border border-[#f1c36f]/15 bg-[#17100d]/95 px-2 py-5 shadow-[0_22px_62px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.06] backdrop-blur-xl">
         <button
           onClick={() => togglePanel("settings")}
           className={cn(
-            "flex size-11 items-center justify-center rounded-full text-white/40 transition hover:bg-white/[0.08] hover:text-white/75",
-            activePanel === "settings" && "bg-white/10 text-white/80",
+            "flex size-11 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-[#f1c36f]",
+            activePanel === "settings" && "bg-[#f1c36f]/[0.14] text-[#f1c36f]",
           )}
           aria-label="Không gian"
           aria-pressed={activePanel === "settings"}
@@ -184,13 +184,13 @@ export function SpacePanel({
           <SlidersHorizontal className="size-6" />
         </button>
 
-        <span className="my-3 h-px w-9 bg-white/[0.18]" />
+        <span className="my-3 h-px w-9 bg-white/[0.16]" />
 
         <button
           onClick={() => togglePanel("scenes")}
           className={cn(
-            "flex size-11 items-center justify-center rounded-full text-white/40 transition hover:bg-white/[0.08] hover:text-white/75",
-            activePanel === "scenes" && "bg-white/10 text-white/80",
+            "flex size-11 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-[#f1c36f]",
+            activePanel === "scenes" && "bg-[#f1c36f]/[0.14] text-[#f1c36f]",
           )}
           aria-label="Cảnh nền"
           aria-pressed={activePanel === "scenes"}
@@ -199,13 +199,13 @@ export function SpacePanel({
           <Map className="size-7" />
         </button>
 
-        <span className="my-3 h-px w-9 bg-white/[0.18]" />
+        <span className="my-3 h-px w-9 bg-white/[0.16]" />
 
         <button
           onClick={() => togglePanel("media")}
           className={cn(
-            "flex size-11 items-center justify-center rounded-full text-white/40 transition hover:bg-white/[0.08] hover:text-white/75",
-            activePanel === "media" && "bg-white/10 text-white/80",
+            "flex size-11 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-[#f1c36f]",
+            activePanel === "media" && "bg-[#f1c36f]/[0.14] text-[#f1c36f]",
           )}
           aria-label="Ảnh nền"
           aria-pressed={activePanel === "media"}
@@ -214,13 +214,13 @@ export function SpacePanel({
           <Film className="size-7" />
         </button>
 
-        <span className="my-3 h-px w-9 bg-white/[0.18]" />
+        <span className="my-3 h-px w-9 bg-white/[0.16]" />
 
         <button
           onClick={() => setDark(!dark)}
           className={cn(
-            "flex size-11 items-center justify-center rounded-full text-white/40 transition hover:bg-white/[0.08] hover:text-white/75",
-            dark && "bg-white/10 text-white/80",
+            "flex size-11 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-[#f1c36f]",
+            dark && "bg-[#f1c36f]/[0.14] text-[#f1c36f]",
           )}
           aria-label="Đổi chế độ sáng tối"
           aria-pressed={dark}

@@ -1,31 +1,26 @@
 "use client";
 
-import { dataUrlToBlob, getStoredFile, putStoredFile } from "@/lib/file-storage";
-import type { Track } from "@/lib/lumi-data";
+import type { ApiPlaylist, ApiTrack, TrackPayload } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
   ListMusic,
+  Loader2,
   Pause,
   Play,
   Plus,
   Repeat,
   SkipBack,
   SkipForward,
+  Trash2,
+  Upload,
   Volume2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
-const MUSIC_STORAGE_KEY = "lumi:music:v1";
-
-type StoredTrack = Omit<Track, "url"> & {
-  url?: string;
-};
-
-interface StoredMusicState {
-  tracks: StoredTrack[];
-  current: number;
-  loop: boolean;
-  volume: number;
+interface MusicPlayerProps {
+  playlist?: ApiPlaylist;
+  onAddTrack: (payload: TrackPayload) => Promise<void>;
+  onRemoveTrack: (trackId: string) => Promise<void>;
 }
 
 function formatTime(s: number) {
@@ -33,6 +28,11 @@ function formatTime(s: number) {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+function clampIndex(index: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.min(Math.max(index, 0), total - 1);
 }
 
 function readBlobAsDataUrl(blob: Blob) {
@@ -46,34 +46,6 @@ function readBlobAsDataUrl(blob: Blob) {
       reject(reader.error ?? new Error("Không đọc được file nhạc."));
     reader.readAsDataURL(blob);
   });
-}
-
-function isStoredTrack(value: unknown): value is StoredTrack {
-  if (!value || typeof value !== "object") return false;
-  const track = value as Partial<Track>;
-  return (
-    typeof track.id === "string" &&
-    typeof track.title === "string" &&
-    typeof track.artist === "string"
-  );
-}
-
-function trackFileKey(id: string) {
-  return `track:${id}:file`;
-}
-
-function trackCoverKey(id: string) {
-  return `track:${id}:cover`;
-}
-
-function saveLocalStorageJson(key: string, value: unknown) {
-  localStorage.removeItem(key);
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-function clampIndex(index: number, total: number) {
-  if (total <= 0) return 0;
-  return Math.min(Math.max(index, 0), total - 1);
 }
 
 function readSynchsafe(bytes: Uint8Array, offset: number) {
@@ -156,9 +128,12 @@ async function readAudioCoverBlob(file: File) {
   return undefined;
 }
 
-export function MusicPlayer() {
+export function MusicPlayer({
+  playlist,
+  onAddTrack,
+  onRemoveTrack,
+}: MusicPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [tracks, setTracks] = useState<Track[]>([]);
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(false);
@@ -166,101 +141,22 @@ export function MusicPlayer() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
   const [showList, setShowList] = useState(false);
-  const [storageReady, setStorageReady] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [removingTrackId, setRemovingTrackId] = useState("");
+  const [draft, setDraft] = useState({
+    title: "",
+    artist: "",
+    audioUrl: "",
+    coverUrl: "",
+  });
 
+  const tracks = playlist?.tracks ?? [];
   const track = tracks[current];
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function restore() {
-    try {
-      const savedMusic = localStorage.getItem(MUSIC_STORAGE_KEY);
-      if (!savedMusic) return;
-
-      const parsed = JSON.parse(savedMusic) as Partial<StoredMusicState>;
-      const savedTracks = Array.isArray(parsed.tracks)
-        ? parsed.tracks.filter(isStoredTrack)
-        : [];
-      const restoredTracks = (
-        await Promise.all(
-          savedTracks.map(async (track): Promise<Track | null> => {
-            let file: Blob | undefined;
-
-            if (track.url?.startsWith("data:")) {
-              file = dataUrlToBlob(track.url);
-              await putStoredFile(trackFileKey(track.id), file);
-            } else {
-              file =
-                (await getStoredFile(trackFileKey(track.id))) ??
-                (await getStoredFile(track.id));
-            }
-
-            if (!file) return null;
-
-            let coverUrl = track.coverUrl;
-            if (track.coverUrl?.startsWith("data:")) {
-              const cover = dataUrlToBlob(track.coverUrl);
-              await putStoredFile(trackCoverKey(track.id), cover);
-              coverUrl = URL.createObjectURL(cover);
-            } else {
-              const cover = await getStoredFile(trackCoverKey(track.id));
-              coverUrl = cover ? URL.createObjectURL(cover) : undefined;
-            }
-
-            return {
-              ...track,
-              url: URL.createObjectURL(file),
-              coverUrl,
-            };
-          }),
-        )
-      ).filter((track): track is Track => track !== null);
-
-      if (!cancelled) {
-        setTracks(restoredTracks);
-        setCurrent(
-          clampIndex(Number(parsed.current) || 0, restoredTracks.length),
-        );
-        if (typeof parsed.loop === "boolean") setLoop(parsed.loop);
-        if (typeof parsed.volume === "number") {
-          setVolume(Math.min(Math.max(parsed.volume, 0), 1));
-        }
-      }
-    } catch (error) {
-      console.warn("Không khôi phục được playlist đã lưu.", error);
-    } finally {
-      if (!cancelled) setStorageReady(true);
-    }
-
-    }
-
-    void restore();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!storageReady) return;
-    try {
-      const storedTracks: StoredTrack[] = tracks.map(
-        ({ url: _url, coverUrl: _coverUrl, ...track }) => track,
-      );
-
-      saveLocalStorageJson(
-        MUSIC_STORAGE_KEY,
-        {
-          tracks: storedTracks,
-          current: clampIndex(current, tracks.length),
-          loop,
-          volume,
-        } satisfies StoredMusicState,
-      );
-    } catch (error) {
-      console.warn("Không lưu được nhạc vào localStorage.", error);
-    }
-  }, [current, loop, storageReady, tracks, volume]);
+    setCurrent((index) => clampIndex(index, tracks.length));
+  }, [tracks.length]);
 
   useEffect(() => {
     const a = audioRef.current;
@@ -286,34 +182,56 @@ export function MusicPlayer() {
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
 
+    setSaving(true);
     try {
-      const uploadedAt = Date.now();
-      const next: Track[] = await Promise.all(
-        Array.from(files).map(async (f, i) => {
-          const id = `${uploadedAt}-${i}`;
-          const [coverBlob] = await Promise.all([
-            readAudioCoverBlob(f),
-            putStoredFile(trackFileKey(id), f),
-          ]);
-          if (coverBlob) await putStoredFile(trackCoverKey(id), coverBlob);
+      for (const file of Array.from(files)) {
+        const [audioUrl, coverBlob] = await Promise.all([
+          readBlobAsDataUrl(file),
+          readAudioCoverBlob(file),
+        ]);
+        const coverUrl = coverBlob ? await readBlobAsDataUrl(coverBlob) : "";
 
-          return {
-            id,
-            title: f.name.replace(/\.[^.]+$/, ""),
-            artist: "Tệp của bạn",
-            url: URL.createObjectURL(f),
-            coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : undefined,
-          };
-        }),
-      );
+        await onAddTrack({
+          title: file.name.replace(/\.[^.]+$/, ""),
+          artist: "Tệp của bạn",
+          audioUrl,
+          coverUrl,
+          source: "upload",
+        });
+      }
 
-      setTracks((prev) => {
-        const merged = [...prev, ...next];
-        if (prev.length === 0) setCurrent(0);
-        return merged;
+      setShowAdd(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft.title.trim() || !draft.audioUrl.trim()) return;
+
+    setSaving(true);
+    try {
+      await onAddTrack({
+        title: draft.title.trim(),
+        artist: draft.artist.trim() || "Tệp của bạn",
+        audioUrl: draft.audioUrl.trim(),
+        coverUrl: draft.coverUrl.trim(),
+        source: "url",
       });
-    } catch (error) {
-      console.warn("Không import được nhạc.", error);
+      setDraft({ title: "", artist: "", audioUrl: "", coverUrl: "" });
+      setShowAdd(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeTrack(trackId: string) {
+    setRemovingTrackId(trackId);
+    try {
+      await onRemoveTrack(trackId);
+    } finally {
+      setRemovingTrackId("");
     }
   }
 
@@ -324,93 +242,94 @@ export function MusicPlayer() {
 
   function next() {
     if (tracks.length === 0) return;
-    setCurrent((c) => (c + 1) % tracks.length);
+    setCurrent((index) => (index + 1) % tracks.length);
     setPlaying(true);
   }
 
   function prev() {
     if (tracks.length === 0) return;
-    setCurrent((c) => (c - 1 + tracks.length) % tracks.length);
+    setCurrent((index) => (index - 1 + tracks.length) % tracks.length);
     setPlaying(true);
   }
 
   return (
-    <div className="relative rounded-xl border border-border bg-card/30 p-3 backdrop-blur-md">
+    <div className="relative border-t border-[#2b2115] bg-[#16110a]/[0.97] px-6 py-3 text-[#ecdfc5] backdrop-blur-xl">
       <audio
         ref={audioRef}
-        src={track?.url}
+        src={track?.audioUrl}
         loop={loop}
         onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onEnded={() => (loop ? null : next())}
       />
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="flex min-w-0 items-center gap-3 lg:w-72">
+      <div className="flex items-center gap-6">
+        <div className="flex w-64 min-w-0 shrink-0 items-center gap-3">
           <div
             className={cn(
-              "relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-gradient-to-br from-secondary to-background shadow-inner",
+              "relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#3a2d1a] bg-gradient-to-br from-[#2b2115] to-[#120d07] shadow-inner",
               playing && "lumi-spin",
             )}
           >
-            {track?.coverUrl && (
+            {track?.coverUrl ? (
               <img
                 src={track.coverUrl}
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover"
                 draggable={false}
               />
+            ) : (
+              <span className="text-[7px] font-semibold uppercase tracking-[0.28em] text-[#a8895c]">
+                Vinyl
+              </span>
             )}
             <div className="absolute inset-0 bg-black/10" />
-            <div className="relative size-3 rounded-full bg-primary" />
-            <div className="absolute inset-2 rounded-full border border-border/60" />
+            <div className="absolute inset-2 rounded-full border border-white/[0.12]" />
           </div>
 
           <div className="min-w-0">
-            <p className="truncate font-heading text-sm leading-tight text-card-foreground">
+            <p className="truncate font-heading text-sm leading-tight text-[#f0e6d2]">
               {track ? track.title : "Chưa có bài hát"}
             </p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.24em] text-[#a8895c]">
               {track ? track.artist : "Thêm nhạc để bắt đầu"}
             </p>
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex shrink-0 items-center gap-1">
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <button
               onClick={prev}
-              className="rounded-lg p-2 text-muted-foreground transition hover:bg-secondary hover:text-card-foreground"
+              className="rounded-full p-2 text-[#a3937a] transition hover:bg-white/[0.06] hover:text-[#ecdfc5]"
               aria-label="Bài trước"
             >
               <SkipBack className="size-4" />
             </button>
             <button
-              onClick={() => setPlaying((p) => !p)}
+              onClick={() => setPlaying((value) => !value)}
               disabled={!track}
-              className="rounded-full bg-primary p-2.5 text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+              className="flex size-11 items-center justify-center rounded-full bg-[#d9b98a] text-[#241b10] shadow-[0_8px_24px_rgba(217,185,138,0.25)] transition hover:brightness-110 disabled:opacity-40"
               aria-label={playing ? "Tạm dừng" : "Phát"}
             >
               {playing ? (
-                <Pause className="size-4" />
+                <Pause className="size-5" />
               ) : (
-                <Play className="size-4" />
+                <Play className="ml-0.5 size-5" />
               )}
             </button>
             <button
               onClick={next}
-              className="rounded-lg p-2 text-muted-foreground transition hover:bg-secondary hover:text-card-foreground"
+              className="rounded-full p-2 text-[#a3937a] transition hover:bg-white/[0.06] hover:text-[#ecdfc5]"
               aria-label="Bài kế"
             >
               <SkipForward className="size-4" />
             </button>
             <button
-              onClick={() => setLoop((l) => !l)}
+              onClick={() => setLoop((value) => !value)}
               className={cn(
-                "rounded-lg p-2 transition hover:bg-secondary",
-                loop
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-card-foreground",
+                "rounded-full p-2 transition hover:bg-white/[0.06]",
+                loop ? "text-[#d9b98a]" : "text-[#a3937a] hover:text-[#ecdfc5]",
               )}
               aria-label="Lặp lại"
               aria-pressed={loop}
@@ -419,30 +338,32 @@ export function MusicPlayer() {
             </button>
           </div>
 
-          <span className="hidden w-9 text-right text-[10px] tabular-nums text-muted-foreground sm:block">
-            {formatTime(progress)}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            value={progress}
-            onChange={(e) => {
-              const a = audioRef.current;
-              if (a) a.currentTime = Number(e.target.value);
-              setProgress(Number(e.target.value));
-            }}
-            className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-border accent-primary"
-            aria-label="Tua bài hát"
-          />
-          <span className="hidden w-9 text-[10px] tabular-nums text-muted-foreground sm:block">
-            {formatTime(duration)}
-          </span>
+          <div className="flex w-full max-w-xl items-center gap-3">
+            <span className="w-9 shrink-0 text-right text-[10px] tabular-nums text-[#8a744f]">
+              {formatTime(progress)}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              value={progress}
+              onChange={(e) => {
+                const audio = audioRef.current;
+                if (audio) audio.currentTime = Number(e.target.value);
+                setProgress(Number(e.target.value));
+              }}
+              className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-[#332716] accent-[#d9b98a]"
+              aria-label="Tua bài hát"
+            />
+            <span className="w-9 shrink-0 text-[10px] tabular-nums text-[#8a744f]">
+              {formatTime(duration)}
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 lg:w-72 lg:justify-end">
+        <div className="flex w-64 shrink-0 items-center justify-end gap-2">
           <div className="hidden items-center gap-2 sm:flex">
-            <Volume2 className="size-4 text-muted-foreground" />
+            <Volume2 className="size-4 text-[#a3937a]" />
             <input
               type="range"
               min={0}
@@ -450,17 +371,17 @@ export function MusicPlayer() {
               step={0.01}
               value={volume}
               onChange={(e) => setVolume(Number(e.target.value))}
-              className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-border accent-primary"
+              className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-[#332716] accent-[#d9b98a]"
               aria-label="Âm lượng"
             />
           </div>
           <button
-            onClick={() => setShowList((s) => !s)}
+            onClick={() => setShowList((value) => !value)}
             className={cn(
-              "rounded-lg p-2 transition hover:bg-secondary",
+              "rounded-full p-2 transition hover:bg-white/[0.06]",
               showList
-                ? "text-primary"
-                : "text-muted-foreground hover:text-card-foreground",
+                ? "text-[#d9b98a]"
+                : "text-[#a3937a] hover:text-[#ecdfc5]",
             )}
             aria-label="Danh sách bài"
             aria-pressed={showList}
@@ -468,74 +389,155 @@ export function MusicPlayer() {
             <ListMusic className="size-4" />
           </button>
 
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground transition hover:border-primary hover:text-card-foreground">
-            <Plus className="size-3.5" />
+          <button
+            onClick={() => setShowAdd((value) => !value)}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border border-[#3a2d1a] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] transition hover:border-[#d9b98a]/50 hover:text-[#ecdfc5]",
+              showAdd ? "text-[#d9b98a]" : "text-[#a3937a]",
+            )}
+            aria-label="Thêm nhạc"
+            aria-pressed={showAdd}
+          >
+            {saving ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Plus className="size-3.5" />
+            )}
             Thêm nhạc
-            <input
-              type="file"
-              accept="audio/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                void handleFiles(e.target.files);
-                e.currentTarget.value = "";
-              }}
-            />
-          </label>
+          </button>
         </div>
       </div>
 
+      {showAdd && (
+        <form
+          onSubmit={(event) => void handleSubmit(event)}
+          className="absolute inset-x-0 bottom-full mb-2 space-y-2 rounded-lg border border-white/[0.10] bg-[#1d160d]/95 p-3 text-white shadow-2xl backdrop-blur-xl"
+        >
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              value={draft.title}
+              onChange={(e) =>
+                setDraft((value) => ({ ...value, title: e.target.value }))
+              }
+              className="h-9 rounded-md border border-white/[0.10] bg-black/[0.28] px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-[#d9b98a]"
+              placeholder="Tên bài"
+            />
+            <input
+              value={draft.artist}
+              onChange={(e) =>
+                setDraft((value) => ({ ...value, artist: e.target.value }))
+              }
+              className="h-9 rounded-md border border-white/[0.10] bg-black/[0.28] px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-[#d9b98a]"
+              placeholder="Nghệ sĩ"
+            />
+          </div>
+          <input
+            value={draft.audioUrl}
+            onChange={(e) =>
+              setDraft((value) => ({ ...value, audioUrl: e.target.value }))
+            }
+            className="h-9 w-full rounded-md border border-white/[0.10] bg-black/[0.28] px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-[#d9b98a]"
+            placeholder="Audio URL hoặc chọn file bên dưới"
+          />
+          <input
+            value={draft.coverUrl}
+            onChange={(e) =>
+              setDraft((value) => ({ ...value, coverUrl: e.target.value }))
+            }
+            className="h-9 w-full rounded-md border border-white/[0.10] bg-black/[0.28] px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-[#d9b98a]"
+            placeholder="Cover URL"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-white/[0.14] px-3 py-2 text-xs text-white/50 transition hover:border-[#d9b98a] hover:text-white">
+              <Upload className="size-3.5" />
+              Tệp nhạc
+              <input
+                type="file"
+                accept="audio/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  void handleFiles(e.target.files);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={saving || !draft.title.trim() || !draft.audioUrl.trim()}
+              className="rounded-md bg-[#d9b98a] px-3 py-2 text-xs font-medium text-[#241b10] transition hover:brightness-110 disabled:opacity-40"
+            >
+              Lưu vào server
+            </button>
+          </div>
+        </form>
+      )}
+
       {showList && (
-        <div className="absolute inset-x-0 bottom-full mb-2 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-border bg-popover/95 p-2 shadow-2xl backdrop-blur-md lumi-scroll">
+        <div className="absolute inset-x-0 bottom-full mb-2 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-white/[0.10] bg-[#1d160d]/95 p-2 text-white shadow-2xl backdrop-blur-xl lumi-scroll">
           {tracks.length === 0 && (
-            <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+            <p className="px-2 py-3 text-center text-xs text-white/45">
               Danh sách trống.
             </p>
           )}
-          {tracks.map((t, i) => (
-            <button
-              key={t.id}
-              onClick={() => playIndex(i)}
+          {tracks.map((item: ApiTrack, i) => (
+            <div
+              key={item.id}
               className={cn(
-                "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition hover:bg-secondary",
-                i === current && "bg-secondary text-primary",
+                "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition hover:bg-white/[0.08]",
+                i === current && "bg-white/[0.08] text-[#d9b98a]",
               )}
             >
-              <span className="flex w-6 shrink-0 justify-center text-muted-foreground">
-                {i === current && playing ? (
-                  <span className="flex h-3 items-end justify-center gap-[2px]">
-                    <span
-                      className="w-[2px] bg-primary"
-                      style={{ animation: "lumi-eq 0.8s ease-in-out infinite" }}
-                    />
-                    <span
-                      className="w-[2px] bg-primary"
-                      style={{
-                        animation: "lumi-eq 0.8s ease-in-out 0.2s infinite",
-                      }}
-                    />
-                    <span
-                      className="w-[2px] bg-primary"
-                      style={{
-                        animation: "lumi-eq 0.8s ease-in-out 0.4s infinite",
-                      }}
-                    />
-                  </span>
-                ) : (
-                  t.coverUrl ? (
+              <button
+                onClick={() => playIndex(i)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <span className="flex w-6 shrink-0 justify-center text-white/45">
+                  {i === current && playing ? (
+                    <span className="flex h-3 items-end justify-center gap-[2px]">
+                      <span
+                        className="w-[2px] bg-[#d9b98a]"
+                        style={{ animation: "lumi-eq 0.8s ease-in-out infinite" }}
+                      />
+                      <span
+                        className="w-[2px] bg-[#d9b98a]"
+                        style={{
+                          animation: "lumi-eq 0.8s ease-in-out 0.2s infinite",
+                        }}
+                      />
+                      <span
+                        className="w-[2px] bg-[#d9b98a]"
+                        style={{
+                          animation: "lumi-eq 0.8s ease-in-out 0.4s infinite",
+                        }}
+                      />
+                    </span>
+                  ) : item.coverUrl ? (
                     <img
-                      src={t.coverUrl}
+                      src={item.coverUrl}
                       alt=""
                       className="size-5 rounded-sm object-cover"
                       draggable={false}
                     />
                   ) : (
                     i + 1
-                  )
+                  )}
+                </span>
+                <span className="truncate">{item.title}</span>
+              </button>
+              <button
+                onClick={() => void removeTrack(item.id)}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/[0.42] transition hover:bg-red-400/10 hover:text-red-200"
+                aria-label={`Xóa ${item.title}`}
+                disabled={removingTrackId === item.id}
+              >
+                {removingTrackId === item.id ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="size-3.5" />
                 )}
-              </span>
-              <span className="truncate">{t.title}</span>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       )}

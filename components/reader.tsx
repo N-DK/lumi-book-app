@@ -1,12 +1,20 @@
 "use client";
 
 import type { Book } from "@/lib/lumi-data";
-import {
-  readSavedReaderPage,
-  saveReaderProgress,
-} from "@/lib/reader-progress";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Moon,
+  Plus,
+  ScrollText,
+  Settings2,
+  Sun,
+  X,
+} from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -20,9 +28,80 @@ import HTMLFlipBook from "react-pageflip";
 interface ReaderProps {
   book: Book;
   onClose: () => void;
+  onProgressChange?: (book: Book, progress: ReaderProgressUpdate) => void;
 }
 
-export function Reader({ book, onClose }: ReaderProps) {
+export interface ReaderProgressUpdate {
+  currentPage: number;
+  totalPages: number;
+  currentChapter?: string;
+}
+
+/* ---------- Reader themes (theo thiết kế LUMI) ---------- */
+type ReaderThemeKey = "midnight" | "sepia" | "paper";
+type ReaderMode = "scroll" | "page";
+
+interface ReaderTheme {
+  label: string;
+  icon: typeof Sun;
+  bg: string;
+  text: string;
+  muted: string;
+  accent: string;
+  accentText: string;
+  rule: string;
+}
+
+const READER_THEMES: Record<ReaderThemeKey, ReaderTheme> = {
+  midnight: {
+    label: "Tối ấm",
+    icon: Moon,
+    bg: "#1a1410",
+    text: "#e8dcc4",
+    muted: "rgba(232,220,196,0.55)",
+    accent: "#c9a876",
+    accentText: "#1a1410",
+    rule: "rgba(232,220,196,0.1)",
+  },
+  sepia: {
+    label: "Giấy ngà",
+    icon: BookOpen,
+    bg: "#f1e4cb",
+    text: "#3a2a1c",
+    muted: "rgba(58,42,28,0.6)",
+    accent: "#8a5a2b",
+    accentText: "#f1e4cb",
+    rule: "rgba(58,42,28,0.12)",
+  },
+  paper: {
+    label: "Trắng",
+    icon: Sun,
+    bg: "#fafaf7",
+    text: "#1b1b1b",
+    muted: "rgba(27,27,27,0.6)",
+    accent: "#a07320",
+    accentText: "#fafaf7",
+    rule: "rgba(27,27,27,0.1)",
+  },
+};
+
+export function Reader({ book, onClose, onProgressChange }: ReaderProps) {
+  const [themeKey, setThemeKey] = useState<ReaderThemeKey>("midnight");
+  const [mode, setMode] = useState<ReaderMode>("scroll");
+  const [fontSize, setFontSize] = useState(18);
+  const [showSettings, setShowSettings] = useState(false);
+  const lastPageRef = useRef<number | null>(null);
+  const [pageInfo, setPageInfo] = useState({
+    page: book.progress?.currentPage ?? 0,
+    total: book.progress?.totalPages ?? 0,
+  });
+
+  const t = READER_THEMES[themeKey];
+  const percent =
+    pageInfo.total > 0
+      ? Math.round(((pageInfo.page + 1) / pageInfo.total) * 100)
+      : Math.min(100, Math.max(0, book.progress?.percent ?? 0));
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -31,30 +110,212 @@ export function Reader({ book, onClose }: ReaderProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const handleProgress = useCallback(
+    (currentPage: number, totalPages: number) => {
+      lastPageRef.current = currentPage;
+      setPageInfo({ page: currentPage, total: totalPages });
+      onProgressChange?.(book, { currentPage, totalPages });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [book.id],
+  );
+
+  const initialPage = lastPageRef.current ?? book.progress?.currentPage ?? 0;
+
+  const bodyProps = {
+    book,
+    mode,
+    t,
+    fontSize,
+    initialPage,
+    onProgress: handleProgress,
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#1a1410]">
-      {/* Header */}
-      <header className="flex h-[56px] shrink-0 items-center justify-between border-b border-[#3d2e22] bg-[#241d16] px-5">
-        <div className="min-w-0">
-          <h2 className="truncate font-serif text-sm font-medium text-[#d4b896]">
-            {book.title}
-          </h2>
-          <p className="truncate text-[11px] text-[#8b7355]">{book.author}</p>
+    <div
+      className="fixed inset-0 z-200 flex flex-col transition-colors duration-300"
+      style={{ backgroundColor: t.bg, color: t.text }}
+    >
+      {/* Top bar */}
+      <header
+        className="shrink-0 border-b backdrop-blur-md"
+        style={{ borderColor: t.rule }}
+      >
+        <div className="flex h-14 items-center gap-3 px-5 sm:px-8">
+          <button
+            onClick={onClose}
+            className="grid size-9 shrink-0 place-items-center rounded-full transition hover:bg-current/5"
+            aria-label="Quay lại thư viện"
+          >
+            <ArrowLeft className="size-4" />
+          </button>
+
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-[10px] uppercase tracking-[0.18em]"
+              style={{ color: t.muted }}
+            >
+              Đang đọc
+            </p>
+            <p className="truncate text-sm font-medium">
+              {book.title} ·{" "}
+              <span style={{ color: t.muted }}>{book.author}</span>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowSettings((v) => !v)}
+              className={cn(
+                "grid size-9 place-items-center rounded-full transition hover:bg-current/5",
+              )}
+              style={
+                showSettings
+                  ? { backgroundColor: t.rule, color: t.accent }
+                  : undefined
+              }
+              aria-label="Cài đặt đọc"
+              aria-pressed={showSettings}
+            >
+              <Settings2 className="size-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="grid size-9 place-items-center rounded-full transition hover:bg-current/5"
+              aria-label="Đóng trình đọc"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         </div>
-        <button
-          onClick={onClose}
-          className="rounded-md p-1.5 text-[#8b7355] transition hover:bg-white/5 hover:text-[#d4b896]"
-          aria-label="Đóng trình đọc"
-        >
-          <X className="size-4" />
-        </button>
+
+        {/* progress strip */}
+        <div className="h-px" style={{ backgroundColor: t.rule }}>
+          <div
+            className="h-full transition-all"
+            style={{ width: `${percent}%`, backgroundColor: t.accent }}
+          />
+        </div>
       </header>
 
+      {/* Settings strip */}
+      {showSettings && (
+        <div
+          className="shrink-0 border-b backdrop-blur"
+          style={{ borderColor: t.rule }}
+        >
+          <div className="flex flex-wrap items-center gap-6 px-5 py-4 sm:px-8">
+            <div className="flex items-center gap-3">
+              <span
+                className="text-[10px] uppercase tracking-[0.2em]"
+                style={{ color: t.muted }}
+              >
+                Cỡ chữ
+              </span>
+              <div
+                className="flex items-center rounded-full border"
+                style={{ borderColor: t.rule }}
+              >
+                <button
+                  onClick={() => setFontSize((s) => Math.max(14, s - 1))}
+                  className="grid size-8 place-items-center rounded-l-full hover:bg-current/5"
+                  aria-label="Giảm cỡ chữ"
+                >
+                  <Minus className="size-3.5" />
+                </button>
+                <span className="w-10 px-3 text-center font-mono text-xs tabular-nums">
+                  {fontSize}
+                </span>
+                <button
+                  onClick={() => setFontSize((s) => Math.min(28, s + 1))}
+                  className="grid size-8 place-items-center rounded-r-full hover:bg-current/5"
+                  aria-label="Tăng cỡ chữ"
+                >
+                  <Plus className="size-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span
+                className="text-[10px] uppercase tracking-[0.2em]"
+                style={{ color: t.muted }}
+              >
+                Nền
+              </span>
+              <div
+                className="flex items-center rounded-full border p-0.5"
+                style={{ borderColor: t.rule }}
+              >
+                {(Object.keys(READER_THEMES) as ReaderThemeKey[]).map((k) => {
+                  const ThemeIcon = READER_THEMES[k].icon;
+                  const active = k === themeKey;
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => setThemeKey(k)}
+                      className="flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition hover:bg-current/5"
+                      style={
+                        active
+                          ? { backgroundColor: t.accent, color: t.accentText }
+                          : undefined
+                      }
+                      aria-pressed={active}
+                    >
+                      <ThemeIcon className="size-3" />
+                      {READER_THEMES[k].label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span
+                className="text-[10px] uppercase tracking-[0.2em]"
+                style={{ color: t.muted }}
+              >
+                Chế độ
+              </span>
+              <div
+                className="flex items-center rounded-full border p-0.5"
+                style={{ borderColor: t.rule }}
+              >
+                {(
+                  [
+                    { k: "scroll", l: "Cuộn", I: ScrollText },
+                    { k: "page", l: "Lật trang", I: BookOpen },
+                  ] as { k: ReaderMode; l: string; I: typeof BookOpen }[]
+                ).map(({ k, l, I }) => {
+                  const active = k === mode;
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => setMode(k)}
+                      className="flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition hover:bg-current/5"
+                      style={
+                        active
+                          ? { backgroundColor: t.accent, color: t.accentText }
+                          : undefined
+                      }
+                      aria-pressed={active}
+                    >
+                      <I className="size-3" />
+                      {l}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Body */}
-      <div className="min-h-0 flex-1 bg-[#1a1410]">
-        {book.kind === "sample" && <SampleReader book={book} />}
-        {book.kind === "pdf" && <PdfReader book={book} />}
-        {book.kind === "epub" && <EpubReader book={book} />}
+      <div className="min-h-0 flex-1">
+        {book.kind === "sample" && <SampleReader {...bodyProps} />}
+        {book.kind === "pdf" && <PdfReader {...bodyProps} />}
+        {book.kind === "epub" && <EpubReader {...bodyProps} />}
       </div>
     </div>
   );
@@ -71,6 +332,7 @@ type FlipOrientation = "portrait" | "landscape";
 type PageFlipApi = {
   flipNext: (corner?: "top" | "bottom") => void;
   flipPrev: (corner?: "top" | "bottom") => void;
+  turnToPage?: (page: number) => void;
 };
 
 type HTMLFlipBookRef = {
@@ -78,6 +340,15 @@ type HTMLFlipBookRef = {
 };
 
 type FlipEvent = { data: unknown };
+
+interface ReaderBodyProps {
+  book: Book;
+  mode: ReaderMode;
+  t: ReaderTheme;
+  fontSize: number;
+  initialPage: number;
+  onProgress: (currentPage: number, totalPages: number) => void;
+}
 
 const EPUB_PAGE_CHAR_LIMIT = 360;
 const EPUB_PAGE_LINE_LIMIT = 13;
@@ -114,6 +385,12 @@ function getFlipOrientation(data: unknown): FlipOrientation | null {
     return mode === "portrait" || mode === "landscape" ? mode : null;
   }
   return null;
+}
+
+function clampPage(page: number, total: number) {
+  if (!Number.isFinite(page)) return 0;
+  if (total <= 0) return Math.max(0, Math.floor(page));
+  return Math.min(Math.max(Math.floor(page), 0), Math.max(0, total - 1));
 }
 
 function isTypingTarget(target: EventTarget | null) {
@@ -228,10 +505,9 @@ function extractTextBlocks(root: ParentNode) {
 }
 
 async function readBookArrayBuffer(book: Book) {
-  if (book.file) return book.file.arrayBuffer();
   if (!book.fileUrl) throw new Error("Missing book file");
 
-  const response = await fetch(book.fileUrl);
+  const response = await fetch(book.fileUrl, { credentials: "include" });
   if (!response.ok) throw new Error("Cannot fetch book file");
   return response.arrayBuffer();
 }
@@ -258,7 +534,317 @@ function parseEpubDocument(markup: string) {
   return parser.parseFromString(markup, "text/html");
 }
 
-/* ---------- FlipPage với nếp gấp mềm mại, không còn chỉ khâu ngang ---------- */
+/* ---------- Reader body: chọn chế độ Cuộn / Lật trang ---------- */
+function ReaderBody({
+  book,
+  pages,
+  mode,
+  t,
+  fontSize,
+  initialPage,
+  onProgress,
+}: ReaderBodyProps & { pages: FlipPageData[] }) {
+  if (mode === "scroll") {
+    return (
+      <ScrollReader
+        book={book}
+        pages={pages}
+        readerKey={book.id}
+        initialPage={initialPage}
+        fontSize={fontSize}
+        t={t}
+        onProgress={onProgress}
+      />
+    );
+  }
+
+  return (
+    <BookFlipReader
+      pages={pages}
+      readerKey={book.id}
+      initialPage={initialPage}
+      t={t}
+      onProgressChange={onProgress}
+    />
+  );
+}
+
+/* ---------- Footer chung (theo thiết kế) ---------- */
+function ReaderFooter({
+  t,
+  page,
+  total,
+  percent,
+  canPrev,
+  canNext,
+  onPrev,
+  onNext,
+  onSeek,
+}: {
+  t: ReaderTheme;
+  page: number;
+  total: number;
+  percent: number;
+  canPrev: boolean;
+  canNext: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onSeek?: (page: number) => void;
+}) {
+  return (
+    <footer
+      className="shrink-0 border-t backdrop-blur-md"
+      style={{ borderColor: t.rule }}
+    >
+      <div className="flex h-16 items-center gap-4 px-5 sm:px-8">
+        <button
+          onClick={onPrev}
+          disabled={!canPrev}
+          className="grid size-9 shrink-0 place-items-center rounded-full border transition hover:bg-current/5 disabled:cursor-not-allowed disabled:opacity-25"
+          style={{ borderColor: t.rule }}
+          aria-label="Trang trước"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="shrink-0 font-mono text-xs tabular-nums">
+            {total > 0 ? page + 1 : 0}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, total - 1)}
+            value={clampPage(page, total)}
+            onChange={(e) => onSeek?.(Number(e.target.value))}
+            disabled={!onSeek || total === 0}
+            className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full disabled:cursor-default"
+            style={{ accentColor: t.accent, backgroundColor: t.rule }}
+            aria-label="Tiến độ đọc"
+          />
+          <span
+            className="shrink-0 font-mono text-xs tabular-nums"
+            style={{ color: t.muted }}
+          >
+            {total}
+          </span>
+        </div>
+
+        <div
+          className="hidden shrink-0 items-center gap-2 text-xs sm:flex"
+          style={{ color: t.muted }}
+        >
+          <span className="font-semibold" style={{ color: t.accent }}>
+            {percent}%
+          </span>
+          <span>·</span>
+          <span>
+            Trang {total > 0 ? page + 1 : 0}/{total}
+          </span>
+        </div>
+
+        <button
+          onClick={onNext}
+          disabled={!canNext}
+          className="grid size-9 shrink-0 place-items-center rounded-full border transition hover:bg-current/5 disabled:cursor-not-allowed disabled:opacity-25"
+          style={{ borderColor: t.rule }}
+          aria-label="Trang sau"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+    </footer>
+  );
+}
+
+/* ---------- Scroll Reader (chế độ Cuộn — theo thiết kế) ---------- */
+function ScrollReader({
+  book,
+  pages,
+  readerKey,
+  initialPage,
+  fontSize,
+  t,
+  onProgress,
+}: {
+  book: Book;
+  pages: FlipPageData[];
+  readerKey: string;
+  initialPage: number;
+  fontSize: number;
+  t: ReaderTheme;
+  onProgress: (currentPage: number, totalPages: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<(HTMLElement | null)[]>([]);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onProgressRef = useRef(onProgress);
+  const total = pages.length;
+  const [page, setPage] = useState(() => clampPage(initialPage, total));
+
+  const percent = total > 0 ? Math.round(((page + 1) / total) * 100) : 0;
+
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+  }, [onProgress]);
+
+  // Cuộn tới trang đã lưu khi mở (trang đầu thì giữ nguyên đầu trang)
+  useEffect(() => {
+    const start = clampPage(initialPage, total);
+    const el = pageRefs.current[start];
+    if (start > 0 && el && containerRef.current) {
+      containerRef.current.scrollTop = el.offsetTop - 24;
+    }
+    if (total > 0) onProgressRef.current(start, total);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readerKey, total]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  const goTo = useCallback(
+    (n: number) => {
+      const target = clampPage(n, total);
+      const el = pageRefs.current[target];
+      if (el && containerRef.current) {
+        containerRef.current.scrollTo({
+          top: el.offsetTop - 24,
+          behavior: "smooth",
+        });
+      }
+    },
+    [total],
+  );
+
+  function handleScroll() {
+    const c = containerRef.current;
+    if (!c || total === 0) return;
+
+    const probe = c.scrollTop + 80;
+    let idx = 0;
+    for (let i = 0; i < total; i++) {
+      const el = pageRefs.current[i];
+      if (el && el.offsetTop <= probe) idx = i;
+      else if (el) break;
+    }
+    // chạm đáy = trang cuối
+    if (c.scrollTop + c.clientHeight >= c.scrollHeight - 8) idx = total - 1;
+
+    if (idx !== page) {
+      setPage(idx);
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(
+        () => onProgressRef.current(idx, total),
+        600,
+      );
+    }
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (isTypingTarget(e.target) || e.altKey || e.ctrlKey || e.metaKey)
+        return;
+      if (e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        goTo(page + 1);
+      }
+      if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault();
+        goTo(page - 1);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [goTo, page]);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="lumi-scroll relative min-h-0 flex-1 overflow-y-auto"
+      >
+        <div className="mx-auto max-w-3xl px-6 py-14 sm:px-10 sm:py-20">
+          <p
+            className="mb-4 text-[11px] uppercase tracking-[0.28em]"
+            style={{ color: t.accent }}
+          >
+            {book.author}
+          </p>
+          <h1 className="mb-12 text-balance font-heading text-3xl font-semibold leading-tight sm:text-4xl">
+            {book.title}
+          </h1>
+
+          <article
+            className="space-y-7 text-pretty"
+            style={{ fontSize: `${fontSize}px`, lineHeight: 1.75 }}
+          >
+            {pages.map((pg, i) => {
+              if (pg.kind === "text") {
+                return (
+                  <p
+                    key={i}
+                    ref={(el) => {
+                      pageRefs.current[i] = el;
+                    }}
+                    className={cn(
+                      "whitespace-pre-line",
+                      i === 0 &&
+                        "first-letter:float-left first-letter:mr-2 first-letter:font-heading first-letter:text-5xl first-letter:font-semibold first-letter:leading-[0.9]",
+                    )}
+                  >
+                    {pg.text}
+                  </p>
+                );
+              }
+              if (pg.kind === "image") {
+                return (
+                  <img
+                    key={i}
+                    ref={(el) => {
+                      pageRefs.current[i] = el;
+                    }}
+                    src={pg.src}
+                    alt={pg.alt}
+                    className="mx-auto w-full max-w-2xl rounded-sm shadow-lg"
+                    draggable={false}
+                  />
+                );
+              }
+              return null;
+            })}
+
+            <div
+              className="my-12 flex items-center gap-4"
+              style={{ color: t.muted }}
+            >
+              <span className="h-px flex-1 bg-current/20" />
+              <span className="text-xs tracking-[0.4em]">✦</span>
+              <span className="h-px flex-1 bg-current/20" />
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <ReaderFooter
+        t={t}
+        page={page}
+        total={total}
+        percent={percent}
+        canPrev={page > 0}
+        canNext={page < total - 1}
+        onPrev={() => goTo(page - 1)}
+        onNext={() => goTo(page + 1)}
+        onSeek={goTo}
+      />
+    </div>
+  );
+}
+
+/* ---------- FlipPage với nếp gấp mềm mại ---------- */
 const FlipPage = forwardRef<
   HTMLDivElement,
   {
@@ -350,10 +936,10 @@ const FlipPage = forwardRef<
 FlipPage.displayName = "FlipPage";
 
 /* ---------- Sample Reader ---------- */
-function SampleReader({ book }: { book: Book }) {
+function SampleReader(props: ReaderBodyProps) {
   const pages = useMemo<FlipPageData[]>(() => {
     const result: FlipPageData[] = [];
-    for (const ch of book.chapters ?? []) {
+    for (const ch of props.book.chapters ?? []) {
       ch.paragraphs.forEach((p) => {
         result.push({
           kind: "text",
@@ -363,18 +949,25 @@ function SampleReader({ book }: { book: Book }) {
       });
     }
     return result;
-  }, [book]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.book.id]);
 
-  return <BookFlipReader pages={pages} readerKey={book.id} />;
+  return <ReaderBody {...props} pages={pages} />;
 }
 
-/* ---------- Book Flip Reader (gáy sách giữa đã lược bỏ chỉ khâu) ---------- */
+/* ---------- Book Flip Reader (chế độ Lật trang) ---------- */
 function BookFlipReader({
   pages,
   readerKey,
+  initialPage = 0,
+  t,
+  onProgressChange,
 }: {
   pages: FlipPageData[];
   readerKey: string;
+  initialPage?: number;
+  t: ReaderTheme;
+  onProgressChange?: (currentPage: number, totalPages: number) => void;
 }) {
   const { contentTotal, flipPages } = useMemo(() => {
     const result = [...pages];
@@ -387,23 +980,18 @@ function BookFlipReader({
   const flipRef = useRef<HTMLFlipBookRef | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const initialPage = useMemo(
-    () => readSavedReaderPage(readerKey, contentTotal),
-    [contentTotal, readerKey],
+  const onProgressChangeRef = useRef(onProgressChange);
+  const clampedInitialPage = useMemo(
+    () => clampPage(initialPage, contentTotal),
+    [contentTotal, initialPage],
   );
-  const [page, setPage] = useState(initialPage);
+  const [page, setPage] = useState(clampedInitialPage);
   const [orientation, setOrientation] = useState<FlipOrientation>("landscape");
   const [size, setSize] = useState({ width: 900, height: 717 });
 
   const isPortrait = orientation === "portrait";
   const spreadSize = isPortrait ? 1 : 2;
   const spreadStartIndex = isPortrait ? page : Math.floor(page / 2) * 2;
-  const currentPageStart =
-    contentTotal > 0 ? Math.min(spreadStartIndex + 1, contentTotal) : 0;
-  const currentPageEnd =
-    contentTotal > 0
-      ? Math.min(spreadStartIndex + spreadSize, contentTotal)
-      : 0;
   const totalSpreads = Math.max(1, Math.ceil(contentTotal / spreadSize));
   const currentSpread =
     contentTotal > 0
@@ -411,12 +999,6 @@ function BookFlipReader({
       : 0;
   const percent =
     contentTotal > 0 ? Math.round((currentSpread / totalSpreads) * 100) : 0;
-  const label =
-    contentTotal === 0
-      ? "Chưa có nội dung"
-      : currentPageStart === currentPageEnd
-        ? `Trang ${currentPageStart} / ${contentTotal}`
-        : `Trang ${currentPageStart}–${currentPageEnd} / ${contentTotal}`;
   const canNext =
     contentTotal > 0 &&
     page <
@@ -424,6 +1006,10 @@ function BookFlipReader({
         0,
         Math.ceil(contentTotal / spreadSize) * spreadSize - spreadSize,
       );
+
+  useEffect(() => {
+    onProgressChangeRef.current = onProgressChange;
+  }, [onProgressChange]);
 
   // Tính kích thước full container
   useEffect(() => {
@@ -484,10 +1070,10 @@ function BookFlipReader({
     const nextOrientation = getFlipOrientation(e.data);
     if (nextPage !== null) {
       setPage(nextPage);
-      saveReaderProgress(readerKey, nextPage, contentTotal);
+      onProgressChangeRef.current?.(nextPage, contentTotal);
     }
     if (nextOrientation) setOrientation(nextOrientation);
-  }, [contentTotal, readerKey]);
+  }, [contentTotal]);
 
   const flipNext = useCallback(() => {
     flipRef.current?.pageFlip?.()?.flipNext("bottom");
@@ -497,12 +1083,27 @@ function BookFlipReader({
     flipRef.current?.pageFlip?.()?.flipPrev("bottom");
   }, []);
 
+  const flipTo = useCallback(
+    (n: number) => {
+      const target = clampPage(n, contentTotal);
+      try {
+        flipRef.current?.pageFlip?.()?.turnToPage?.(target);
+        setPage(target);
+        onProgressChangeRef.current?.(target, contentTotal);
+      } catch {
+        /* noop */
+      }
+    },
+    [contentTotal],
+  );
+
   useEffect(() => {
-    const savedPage = readSavedReaderPage(readerKey, contentTotal);
-    setPage(savedPage);
+    setPage(clampedInitialPage);
     setOrientation("landscape");
-    saveReaderProgress(readerKey, savedPage, contentTotal);
-  }, [contentTotal, readerKey]);
+    if (contentTotal > 0) {
+      onProgressChangeRef.current?.(clampedInitialPage, contentTotal);
+    }
+  }, [clampedInitialPage, contentTotal]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -534,9 +1135,9 @@ function BookFlipReader({
   return (
     <div ref={containerRef} className="flex h-full flex-col">
       {/* Book area */}
-      <div className="min-h-0 flex-1 flex items-center justify-center overflow-hidden px-4 py-7 sm:px-8 bg-[#f2e1c0]">
+      <div className="min-h-0 flex-1 flex items-center justify-center overflow-hidden px-4 py-7 sm:px-8">
         <div
-          className="relative select-none "
+          className="relative select-none"
           style={{
             width: size.width,
             height: size.height,
@@ -549,15 +1150,6 @@ function BookFlipReader({
             draggable={false}
           />
 
-          {/* Book shadow */}
-          {/* <div
-            className="pointer-events-none absolute inset-x-[4%] bottom-[2%] z-0 h-[12%]"
-            style={{
-              borderRadius: "50%",
-              boxShadow: "0 18px 38px rgba(0,0,0,0.34)",
-            }}
-          /> */}
-
           <HTMLFlipBook
             key={`${readerKey}-${size.width}-${size.height}`}
             ref={flipRef}
@@ -568,7 +1160,7 @@ function BookFlipReader({
             minHeight={flipHeight}
             maxHeight={flipHeight}
             size="fixed"
-            startPage={initialPage}
+            startPage={clampedInitialPage}
             drawShadow={true}
             flippingTime={800}
             usePortrait={false}
@@ -609,47 +1201,24 @@ function BookFlipReader({
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="h-[61px] shrink-0 border-t border-[#3d2e22] bg-[#241d16] flex items-center justify-center gap-5 px-5">
-        <button
-          onClick={flipPrev}
-          disabled={page <= 0}
-          className="flex size-8 items-center justify-center rounded-full border border-[#3d2e22] text-[#8b7355] transition hover:bg-white/5 hover:text-[#d4b896] disabled:opacity-20 disabled:cursor-not-allowed"
-          aria-label="Trang trước"
-        >
-          <ChevronLeft className="size-3.5" />
-        </button>
-
-        <div className="flex items-center gap-3 flex-1 max-w-xs">
-          <div className="h-1 flex-1 rounded-full bg-[#3d2e22] overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${percent}%`,
-                background: "linear-gradient(to right, #8b7355, #c4a97d)",
-              }}
-            />
-          </div>
-          <span className="text-[11px] tabular-nums text-[#d4b896] font-serif whitespace-nowrap">
-            {label}
-          </span>
-        </div>
-
-        <button
-          onClick={flipNext}
-          disabled={!canNext}
-          className="flex size-8 items-center justify-center rounded-full border border-[#3d2e22] text-[#8b7355] transition hover:bg-white/5 hover:text-[#d4b896] disabled:opacity-20 disabled:cursor-not-allowed"
-          aria-label="Trang kế"
-        >
-          <ChevronRight className="size-3.5" />
-        </button>
-      </div>
+      <ReaderFooter
+        t={t}
+        page={clampPage(spreadStartIndex, contentTotal)}
+        total={contentTotal}
+        percent={percent}
+        canPrev={page > 0}
+        canNext={canNext}
+        onPrev={flipPrev}
+        onNext={flipNext}
+        onSeek={flipTo}
+      />
     </div>
   );
 }
 
 /* ---------- PDF Reader ---------- */
-function PdfReader({ book }: { book: Book }) {
+function PdfReader(props: ReaderBodyProps) {
+  const { book } = props;
   const [pages, setPages] = useState<FlipPageData[]>([]);
   const [status, setStatus] = useState("Đang mở PDF...");
   const [error, setError] = useState<string | null>(null);
@@ -663,7 +1232,7 @@ function PdfReader({ book }: { book: Book }) {
       setError(null);
       setStatus("Đang mở PDF...");
 
-      if (!book.file && !book.fileUrl) {
+      if (!book.fileUrl) {
         setError("Không tìm thấy file PDF.");
         return;
       }
@@ -733,15 +1302,17 @@ function PdfReader({ book }: { book: Book }) {
       cancelled = true;
       void loadingTask?.destroy?.();
     };
-  }, [book]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book.id, book.fileUrl]);
 
-  if (error) return <ReaderStatus message={error} />;
-  if (status) return <ReaderStatus message={status} />;
-  return <BookFlipReader pages={pages} readerKey={`pdf-${book.id}`} />;
+  if (error) return <ReaderStatus message={error} t={props.t} />;
+  if (status) return <ReaderStatus message={status} t={props.t} />;
+  return <ReaderBody {...props} pages={pages} />;
 }
 
 /* ---------- EPUB Reader ---------- */
-function EpubReader({ book }: { book: Book }) {
+function EpubReader(props: ReaderBodyProps) {
+  const { book } = props;
   const [pages, setPages] = useState<FlipPageData[]>([]);
   const [status, setStatus] = useState("Đang mở EPUB...");
   const [error, setError] = useState<string | null>(null);
@@ -754,7 +1325,7 @@ function EpubReader({ book }: { book: Book }) {
       setError(null);
       setStatus("Đang mở EPUB...");
 
-      if (!book.file && !book.fileUrl) {
+      if (!book.fileUrl) {
         setError("Không tìm thấy file EPUB.");
         return;
       }
@@ -843,24 +1414,23 @@ function EpubReader({ book }: { book: Book }) {
     return () => {
       cancelled = true;
     };
-  }, [book]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book.id, book.fileUrl]);
 
-  if (error) return <ReaderStatus message={error} />;
-  if (status) return <ReaderStatus message={status} />;
-  return <BookFlipReader pages={pages} readerKey={`epub-${book.id}`} />;
+  if (error) return <ReaderStatus message={error} t={props.t} />;
+  if (status) return <ReaderStatus message={status} t={props.t} />;
+  return <ReaderBody {...props} pages={pages} />;
 }
 
 /* ---------- Reader Status ---------- */
-function ReaderStatus({ message }: { message: string }) {
+function ReaderStatus({ message, t }: { message: string; t: ReaderTheme }) {
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
+    <div className="flex h-full items-center justify-center p-8">
       <div
-        className="px-10 py-6 font-serif text-sm"
+        className="rounded-lg border px-10 py-6 text-sm"
         style={{
-          backgroundColor: "#f2e1c0",
-          color: "#2c1810",
-          border: "1px solid rgba(180, 150, 120, 0.3)",
-          boxShadow: "0 8px 30px rgba(0,0,0,0.3)",
+          borderColor: t.rule,
+          color: t.muted,
         }}
       >
         {message}
