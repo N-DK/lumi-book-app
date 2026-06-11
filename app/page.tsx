@@ -43,9 +43,11 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type AppTab = "discover" | "for-you" | "me" | "favorites" | "recent";
+const APP_TABS: AppTab[] = ["discover", "for-you", "me", "favorites", "recent"];
 
 const DEFAULT_BACKGROUND =
   PRESET_SCENES.find((scene) => scene.id === "wood")?.css ??
@@ -55,6 +57,15 @@ const HEADER_HEIGHT = 72;
 const RIGHT_DOCK_GUTTER = 112;
 const PLAYER_HEIGHT = 92;
 const RECOMMENDED_PAGE_SIZE = 15;
+
+function getTabFromPathname(pathname: string | null): AppTab {
+  const segment = pathname?.split("/").filter(Boolean)[0] ?? "discover";
+  return APP_TABS.includes(segment as AppTab) ? (segment as AppTab) : "discover";
+}
+
+function getTabHref(tab: AppTab) {
+  return `/${tab}`;
+}
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;
@@ -801,9 +812,23 @@ function CategoryTopics({
 }
 
 export default function Page() {
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<AppTab>("discover");
+  const [activeTab, setActiveTabState] = useState<AppTab>(() =>
+    getTabFromPathname(pathname),
+  );
+  const setActiveTab = useCallback(
+    (tab: AppTab) => {
+      const href = getTabHref(tab);
+      setActiveTabState(tab);
+
+      if (typeof window !== "undefined" && window.location.pathname !== href) {
+        window.history.pushState({ tab }, "", href);
+      }
+    },
+    [],
+  );
   const [books, setBooks] = useState<Book[]>([]);
   const [allBooks, setAllBooks] = useState<Book[]>([]);
   const [libraryBooks, setLibraryBooks] = useState<Book[]>([]);
@@ -862,6 +887,26 @@ export default function Page() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+
+  useEffect(() => {
+    if (pathname !== "/") {
+      setActiveTabState(getTabFromPathname(pathname));
+      return;
+    }
+
+    const href = getTabHref("discover");
+    setActiveTabState("discover");
+    window.history.replaceState({ tab: "discover" }, "", href);
+  }, [pathname]);
+
+  useEffect(() => {
+    function handlePopState() {
+      setActiveTabState(getTabFromPathname(window.location.pathname));
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const refreshLibrary = useCallback(async () => {
     const [bookmarkData, playlistData] = await Promise.all([
