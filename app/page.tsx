@@ -41,6 +41,7 @@ import {
   Moon,
   Search,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -65,6 +66,95 @@ function getInitials(name: string) {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase();
+}
+
+function bookMatchesQuery(book: Book, query: string) {
+  const normalizedQuery = normalizeSearchText(query.trim());
+  if (!normalizedQuery) return false;
+
+  return [book.title, book.author, book.category, ...(book.categories ?? [])]
+    .filter(Boolean)
+    .some((value) => normalizeSearchText(value as string).includes(normalizedQuery));
+}
+
+function getHighlightedRange(value: string, query: string) {
+  const normalizedQuery = normalizeSearchText(query.trim());
+  if (!normalizedQuery) return null;
+
+  let normalized = "";
+  const indexMap: number[] = [];
+
+  for (let index = 0; index < value.length; ) {
+    const char = Array.from(value.slice(index))[0];
+    const clean = normalizeSearchText(char);
+
+    for (let i = 0; i < clean.length; i += 1) {
+      normalized += clean[i];
+      indexMap.push(index);
+    }
+
+    index += char.length;
+  }
+
+  const start = normalized.indexOf(normalizedQuery);
+  if (start < 0) return null;
+
+  const lastMatchIndex = start + normalizedQuery.length - 1;
+  const originalStart = indexMap[start];
+  const originalEnd =
+    lastMatchIndex + 1 < indexMap.length
+      ? indexMap[lastMatchIndex + 1]
+      : value.length;
+
+  return { start: originalStart, end: originalEnd };
+}
+
+function HighlightedTitle({ title, query }: { title: string; query: string }) {
+  const range = getHighlightedRange(title, query);
+  if (!range) return <>{title}</>;
+
+  return (
+    <>
+      {title.slice(0, range.start)}
+      <span className="font-semibold text-[#d9b98a]">
+        {title.slice(range.start, range.end)}
+      </span>
+      {title.slice(range.end)}
+    </>
+  );
+}
+
+function SearchBookCover({ book }: { book: Book }) {
+  return (
+    <span
+      className="relative h-11 w-8 shrink-0 overflow-hidden rounded-[5px] border border-[#3a2d1a] shadow-[0_8px_18px_rgba(0,0,0,0.34)]"
+      style={{ background: book.spine }}
+      aria-hidden="true"
+    >
+      {book.coverUrl ? (
+        <img
+          src={book.coverUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          draggable={false}
+        />
+      ) : (
+        <>
+          <span className="absolute inset-y-0 left-0 w-1 bg-black/25" />
+          <span className="absolute inset-0 bg-gradient-to-br from-white/[0.16] via-transparent to-black/25" />
+        </>
+      )}
+    </span>
+  );
 }
 
 function LoginScreen({ error }: { error?: string | null }) {
@@ -289,14 +379,26 @@ function AppSidebar({
 function TopHeader({
   search,
   setSearch,
+  searchResults,
+  searchLoading,
   user,
   onLogout,
+  onOpenBook,
+  onClearSearch,
 }: {
   search: string;
   setSearch: (value: string) => void;
+  searchResults: Book[];
+  searchLoading: boolean;
   user: AuthUser | null;
   onLogout: () => void;
+  onOpenBook: (book: Book) => void;
+  onClearSearch: () => void;
 }) {
+  const [searchFocused, setSearchFocused] = useState(false);
+  const trimmedSearch = search.trim();
+  const showSearchPanel = searchFocused && trimmedSearch.length > 0;
+
   return (
     <header
       className="fixed right-0 top-0 z-[70] border-b border-[#2b2115] bg-[#16110a]/[0.92] backdrop-blur"
@@ -304,13 +406,88 @@ function TopHeader({
     >
       <div className="flex h-full min-w-0 items-center gap-4 px-8">
         <label className="relative min-w-[260px] max-w-xl flex-1">
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#8a744f]" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#d9b98a]" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="h-11 w-full rounded-xl border border-[#2e2415] bg-[#1d160d] pl-11 pr-4 text-sm text-[#ecdfc5] outline-none transition placeholder:text-[#8a744f] focus:border-[#d9b98a]/40"
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setSearchFocused(false);
+                onClearSearch();
+              }
+            }}
+            className="h-11 w-full rounded-xl border border-[#3a2d1a] bg-[#1d160d] pl-11 pr-11 text-sm font-medium text-[#f0e6d2] outline-none transition placeholder:text-[#8a744f] focus:border-[#d9b98a]/60 focus:bg-[#241b10]"
             placeholder="Tìm sách, tác giả..."
           />
+          {trimmedSearch && (
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onClearSearch}
+              className="absolute right-3 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-[#3a2d1a] text-[#d9b98a] transition hover:bg-[#4a3a21]"
+              aria-label="Xóa tìm kiếm"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+
+          {showSearchPanel && (
+            <div
+              className="absolute left-0 right-0 top-full z-[100] mt-2 overflow-hidden rounded-xl border border-[#332716] bg-[#1d160d] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.52)]"
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              {searchLoading && searchResults.length === 0 ? (
+                <div className="space-y-1">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="flex h-[60px] items-center gap-3 rounded-lg px-3"
+                    >
+                      <div className="h-11 w-8 animate-pulse rounded-[5px] bg-[#2b2115]" />
+                      <div className="space-y-2">
+                        <div className="h-3 w-48 animate-pulse rounded-full bg-[#332716]" />
+                        <div className="h-2.5 w-28 animate-pulse rounded-full bg-[#2b2115]" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : searchResults.length > 0 ? (
+                <div className="space-y-1">
+                  {searchResults.slice(0, 6).map((book) => (
+                    <button
+                      key={book.id}
+                      type="button"
+                      onClick={() => {
+                        onOpenBook(book);
+                        setSearchFocused(false);
+                      }}
+                      className="flex h-[60px] w-full items-center gap-3 rounded-lg px-3 text-left transition hover:bg-[#2b2115] focus-visible:bg-[#2b2115] focus-visible:outline-none"
+                    >
+                      <SearchBookCover book={book} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-[#f0e6d2]">
+                          <HighlightedTitle
+                            title={book.title}
+                            query={trimmedSearch}
+                          />
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-[#8a744f]">
+                          {book.author}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-12 items-center gap-3 rounded-lg px-3 text-sm text-[#8a744f]">
+                  <Search className="size-5 shrink-0 text-[#8a744f]" />
+                  Không tìm thấy sách phù hợp.
+                </div>
+              )}
+            </div>
+          )}
         </label>
 
         <div className="ml-auto flex min-w-0 shrink-0 items-center gap-4">
@@ -599,10 +776,13 @@ export default function Page() {
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AppTab>("discover");
   const [books, setBooks] = useState<Book[]>([]);
+  const [allBooks, setAllBooks] = useState<Book[]>([]);
   const [libraryBooks, setLibraryBooks] = useState<Book[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<ApiPlaylist[]>([]);
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<Book[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [category, setCategory] = useState("all");
   const [openBook, setOpenBook] = useState<Book | null>(null);
   const [loadingData, setLoadingData] = useState(false);
@@ -660,9 +840,11 @@ export default function Page() {
   }, []);
 
   const refreshDiscover = useCallback(async () => {
-    const bookData = await listBooks({ search, category });
-    setBooks(bookData.books.map(toReaderBook));
-  }, [category, search]);
+    const bookData = await listBooks({ category });
+    const mappedBooks = bookData.books.map(toReaderBook);
+    setBooks(mappedBooks);
+    if (category === "all") setAllBooks(mappedBooks);
+  }, [category]);
 
   const refreshAll = useCallback(async () => {
     setLoadingData(true);
@@ -707,13 +889,55 @@ export default function Page() {
     void refreshAll();
   }, [refreshAll, user]);
 
+  useEffect(() => {
+    const query = search.trim();
+    if (!user || !query) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchLoading(true);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        let sourceBooks = allBooks;
+
+        if (sourceBooks.length === 0) {
+          const bookData = await listBooks({});
+          sourceBooks = bookData.books.map(toReaderBook);
+          if (!cancelled) setAllBooks(sourceBooks);
+        }
+
+        const nextResults = sourceBooks
+          .filter((book) => bookMatchesQuery(book, query))
+          .slice(0, 8);
+
+        if (!cancelled) setSearchResults(nextResults);
+      } catch (error) {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearchLoading(false);
+      }
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [allBooks, search, user]);
+
   async function handleLogout() {
     try {
       await logoutUser();
       setUser(null);
       setBooks([]);
+      setAllBooks([]);
       setLibraryBooks([]);
       setPlaylists([]);
+      setSearch("");
+      setSearchResults([]);
       setOpenBook(null);
     } catch (error) {
       setError(getErrorMessage(error));
@@ -820,8 +1044,15 @@ export default function Page() {
       <TopHeader
         search={search}
         setSearch={setSearch}
+        searchResults={searchResults}
+        searchLoading={searchLoading}
         user={user}
         onLogout={handleLogout}
+        onOpenBook={setOpenBook}
+        onClearSearch={() => {
+          setSearch("");
+          setSearchResults([]);
+        }}
       />
 
       <main
