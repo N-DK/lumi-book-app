@@ -1155,6 +1155,7 @@ export default function Page() {
                   <Bookshelf
                     books={books}
                     savedBookIds={savedBookIds}
+                    showProgress
                     emptyLabel="Chưa tìm thấy sách phù hợp."
                     onOpen={setOpenBook}
                     onToggleBookmark={handleToggleBookmark}

@@ -15,10 +15,9 @@ interface BookshelfProps {
 
 function getProgressLabel(book: Book) {
   const progress = book.progress
-  if (!progress) return "Chưa đọc"
-  if (progress.completed || progress.percent >= 100) return "Đã đọc xong"
-  if (progress.totalPages > 0) return `Đã đọc ${progress.percent}%`
-  return `Trang ${progress.currentPage + 1}`
+  if (!progress) return "Đã đọc 0%"
+  if (progress.completed || progress.percent >= 100) return "Đã đọc 100%"
+  return `Đã đọc ${getProgressPercent(book)}%`
 }
 
 function getProgressPercent(book: Book) {
@@ -95,6 +94,11 @@ export function Bookshelf({
                   </div>
                 )}
                 <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-black/25 via-transparent to-white/[0.07]" />
+                {showProgress && (
+                  <span className="absolute left-2 top-2 z-20 rounded-full border border-[#d9b98a]/30 bg-[#1d160d]/80 px-2 py-1 text-[10px] font-bold tabular-nums text-[#f0e6d2] shadow-lg backdrop-blur">
+                    {progressPercent}%
+                  </span>
+                )}
               </div>
             </button>
 
