@@ -2,11 +2,12 @@
 
 import type { Book } from "@/lib/lumi-data"
 import { cn } from "@/lib/utils"
-import { Bookmark, BookmarkCheck } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 interface BookshelfProps {
   books: Book[]
   savedBookIds?: Set<string>
+  bookmarkingBookIds?: Set<string>
   showProgress?: boolean
   emptyLabel?: string
   onOpen: (book: Book) => void
@@ -24,9 +25,52 @@ function getProgressPercent(book: Book) {
   return book.progress ? Math.min(100, Math.max(0, book.progress.percent)) : 0
 }
 
+function BookmarkToggle({
+  saved,
+  loading,
+  onToggle,
+}: {
+  saved: boolean
+  loading: boolean
+  onToggle: () => void
+}) {
+  return (
+    <label
+      className={cn(
+        "ui-bookmark absolute right-2 top-2 z-20 flex size-9 items-center justify-center rounded-full border border-[#d9b98a]/35 bg-[#1d160d]/80 shadow-[0_10px_26px_rgba(0,0,0,0.55)] backdrop-blur-md transition hover:border-[#d9b98a]/60 hover:bg-[#241b10]/90",
+        saved &&
+          "is-saved border-[#d9b98a]/75 bg-[#2b2115]/95 shadow-[0_10px_30px_rgba(217,185,138,0.26)]",
+        loading && "is-loading cursor-wait",
+      )}
+      aria-label={saved ? "Bỏ lưu sách" : "Lưu sách"}
+      aria-busy={loading}
+    >
+      <input
+        type="checkbox"
+        checked={saved}
+        disabled={loading}
+        onChange={onToggle}
+      />
+      <span className="bookmark" aria-hidden="true">
+        <svg viewBox="0 0 32 32">
+          <g>
+            <path d="M27 4v27a1 1 0 0 1-1.625.781L16 24.281l-9.375 7.5A1 1 0 0 1 5 31V4a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4z" />
+          </g>
+        </svg>
+      </span>
+      {loading && (
+        <span className="absolute inset-0 flex items-center justify-center rounded-full bg-[#1d160d]/70 text-[#d9b98a]">
+          <Loader2 className="size-4 animate-spin" />
+        </span>
+      )}
+    </label>
+  )
+}
+
 export function Bookshelf({
   books,
   savedBookIds,
+  bookmarkingBookIds,
   showProgress = false,
   emptyLabel = "Chưa có sách.",
   onOpen,
@@ -44,6 +88,7 @@ export function Bookshelf({
     <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {books.map((book) => {
         const saved = savedBookIds?.has(book.id) ?? Boolean(book.saved)
+        const bookmarking = bookmarkingBookIds?.has(book.id) ?? false
         const progressPercent = getProgressPercent(book)
 
         return (
@@ -103,21 +148,11 @@ export function Bookshelf({
             </button>
 
             {onToggleBookmark && (
-              <button
-                onClick={() => onToggleBookmark(book)}
-                className={cn(
-                  "absolute right-2 top-2 z-20 flex size-8 items-center justify-center rounded-full border border-white/15 bg-black/45 text-[#ecdfc5] shadow-lg backdrop-blur transition hover:bg-black/65",
-                  saved && "text-[#d9b98a]",
-                )}
-                aria-label={saved ? "Bỏ lưu sách" : "Lưu sách"}
-                aria-pressed={saved}
-              >
-                {saved ? (
-                  <BookmarkCheck className="size-4" />
-                ) : (
-                  <Bookmark className="size-4" />
-                )}
-              </button>
+              <BookmarkToggle
+                saved={saved}
+                loading={bookmarking}
+                onToggle={() => onToggleBookmark(book)}
+              />
             )}
 
             {showProgress && (

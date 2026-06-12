@@ -822,6 +822,9 @@ export default function Page() {
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Book[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [bookmarkingBookIds, setBookmarkingBookIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [category, setCategory] = useState("all");
   const [openBook, setOpenBook] = useState<Book | null>(null);
   const [loadingData, setLoadingData] = useState(false);
@@ -1057,6 +1060,7 @@ export default function Page() {
       setPlaylists([]);
       setSearch("");
       setSearchResults([]);
+      setBookmarkingBookIds(new Set());
       setOpenBook(null);
     } catch (error) {
       setError(getErrorMessage(error));
@@ -1065,7 +1069,14 @@ export default function Page() {
 
   async function handleToggleBookmark(book: Book) {
     setError(null);
+    if (bookmarkingBookIds.has(book.id)) return;
+
     const nextSaved = !savedBookIds.has(book.id);
+    setBookmarkingBookIds((items) => {
+      const next = new Set(items);
+      next.add(book.id);
+      return next;
+    });
 
     try {
       if (savedBookIds.has(book.id)) {
@@ -1086,6 +1097,12 @@ export default function Page() {
       await refreshLibrary();
     } catch (error) {
       setError(getErrorMessage(error));
+    } finally {
+      setBookmarkingBookIds((items) => {
+        const next = new Set(items);
+        next.delete(book.id);
+        return next;
+      });
     }
   }
 
@@ -1260,6 +1277,7 @@ export default function Page() {
                     <Bookshelf
                       books={books}
                       savedBookIds={savedBookIds}
+                      bookmarkingBookIds={bookmarkingBookIds}
                       showProgress
                       emptyLabel="Chưa tìm thấy sách phù hợp."
                       onOpen={setOpenBook}
@@ -1305,6 +1323,7 @@ export default function Page() {
                   <Bookshelf
                     books={libraryBooks}
                     savedBookIds={savedBookIds}
+                    bookmarkingBookIds={bookmarkingBookIds}
                     showProgress
                     emptyLabel="Bạn chưa lưu sách nào."
                     onOpen={setOpenBook}

@@ -258,6 +258,144 @@
   background: transparent !important;
   overflow: visible !important;
 }
+
+.ui-bookmark {
+  --icon-size: 22px;
+  --icon-secondary-color: #f5e6c8;
+  --icon-hover-color: #fff3d4;
+  --icon-primary-color: #f1c36f;
+  --icon-circle-border: 1px solid var(--icon-primary-color);
+  --icon-circle-size: 35px;
+  --icon-anmt-duration: 0.3s;
+  cursor: pointer;
+}
+
+.ui-bookmark input {
+  appearance: none;
+  display: none;
+}
+
+.ui-bookmark .bookmark {
+  align-items: center;
+  display: flex;
+  fill: var(--icon-secondary-color);
+  height: auto;
+  justify-content: center;
+  position: relative;
+  transform-origin: top;
+  transition: 0.2s;
+  width: var(--icon-size);
+}
+
+.ui-bookmark .bookmark svg {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.55));
+  height: var(--icon-size);
+  width: var(--icon-size);
+}
+
+.ui-bookmark .bookmark::after {
+  border-radius: 50%;
+  box-shadow:
+    0 30px 0 -4px var(--icon-primary-color),
+    30px 0 0 -4px var(--icon-primary-color),
+    0 -30px 0 -4px var(--icon-primary-color),
+    -30px 0 0 -4px var(--icon-primary-color),
+    -22px 22px 0 -4px var(--icon-primary-color),
+    -22px -22px 0 -4px var(--icon-primary-color),
+    22px -22px 0 -4px var(--icon-primary-color),
+    22px 22px 0 -4px var(--icon-primary-color);
+  content: "";
+  height: 10px;
+  position: absolute;
+  transform: scale(0);
+  width: 10px;
+}
+
+.ui-bookmark .bookmark::before {
+  border: var(--icon-circle-border);
+  border-radius: 50%;
+  content: "";
+  opacity: 0;
+  position: absolute;
+}
+
+.ui-bookmark:hover .bookmark {
+  fill: var(--icon-hover-color);
+}
+
+.ui-bookmark.is-saved .bookmark {
+  filter: drop-shadow(0 0 10px rgb(241 195 111 / 0.38));
+}
+
+.ui-bookmark input:checked + .bookmark {
+  animation: lumi-bookmark var(--icon-anmt-duration) forwards;
+  fill: var(--icon-primary-color);
+  transition-delay: 0.3s;
+}
+
+.ui-bookmark input:checked + .bookmark::before {
+  animation: lumi-bookmark-circle var(--icon-anmt-duration)
+    cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation-delay: var(--icon-anmt-duration);
+}
+
+.ui-bookmark input:checked + .bookmark::after {
+  animation: lumi-bookmark-circles var(--icon-anmt-duration)
+    cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation-delay: var(--icon-anmt-duration);
+}
+
+.ui-bookmark input:disabled + .bookmark {
+  cursor: wait;
+}
+
+.ui-bookmark.is-loading .bookmark {
+  opacity: 0.45;
+}
+
+@keyframes lumi-bookmark {
+  50% {
+    transform: scaleY(0.6);
+  }
+
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes lumi-bookmark-circle {
+  from {
+    height: 0;
+    opacity: 0;
+    width: 0;
+  }
+
+  90% {
+    height: var(--icon-circle-size);
+    opacity: 1;
+    width: var(--icon-circle-size);
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes lumi-bookmark-circles {
+  from {
+    transform: scale(0);
+  }
+
+  40% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
 .lumi-open-book-flipbook .stf__item {
   background-color: var(--lumi-open-book-page-bg, #ead6ac) !important;
 }
