@@ -1362,6 +1362,9 @@ export default function Page() {
           book={openBook}
           onClose={() => setOpenBook(null)}
           onProgressChange={handleProgressChange}
+          isBookmarked={savedBookIds.has(openBook.id)}
+          isBookmarking={bookmarkingBookIds.has(openBook.id)}
+          onToggleBookmark={handleToggleBookmark}
         />
       )}
     </div>

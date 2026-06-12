@@ -8,6 +8,7 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   Minus,
   Moon,
   Plus,
@@ -31,6 +32,9 @@ interface ReaderProps {
   book: Book;
   onClose: () => void;
   onProgressChange?: (book: Book, progress: ReaderProgressUpdate) => void;
+  isBookmarked?: boolean;
+  isBookmarking?: boolean;
+  onToggleBookmark?: (book: Book) => void;
 }
 
 export interface ReaderProgressUpdate {
@@ -111,7 +115,14 @@ const READER_THEMES: Record<ReaderThemeKey, ReaderTheme> = {
   },
 };
 
-export function Reader({ book, onClose, onProgressChange }: ReaderProps) {
+export function Reader({
+  book,
+  onClose,
+  onProgressChange,
+  isBookmarked = false,
+  isBookmarking = false,
+  onToggleBookmark,
+}: ReaderProps) {
   const [themeKey, setThemeKey] = useState<ReaderThemeKey>("sepia");
   const [mode, setMode] = useState<ReaderMode>("page");
   const [fontSize, setFontSize] = useState(18);
@@ -190,6 +201,50 @@ export function Reader({ book, onClose, onProgressChange }: ReaderProps) {
           </div>
 
           <div className="flex items-center gap-1">
+            {onToggleBookmark && (
+              <label
+                className={cn(
+                  "ui-bookmark relative grid size-9 place-items-center rounded-full border transition hover:bg-current/5",
+                  isBookmarked &&
+                    "is-saved shadow-[0_8px_24px_rgba(0,0,0,0.16)]",
+                  isBookmarking && "is-loading cursor-wait",
+                )}
+                style={
+                  {
+                    "--icon-secondary-color": t.text,
+                    "--icon-hover-color": t.accent,
+                    "--icon-primary-color": t.accent,
+                    "--icon-circle-border": `1px solid ${t.accent}`,
+                    borderColor: isBookmarked ? t.accent : t.rule,
+                    backgroundColor: isBookmarked ? t.rule : "transparent",
+                  } as CSSProperties
+                }
+                aria-label={isBookmarked ? "Bỏ lưu sách" : "Lưu sách"}
+                aria-busy={isBookmarking}
+              >
+                <input
+                  type="checkbox"
+                  checked={isBookmarked}
+                  disabled={isBookmarking}
+                  onChange={() => onToggleBookmark(book)}
+                />
+                <span className="bookmark" aria-hidden="true">
+                  <svg viewBox="0 0 32 32">
+                    <g>
+                      <path d="M27 4v27a1 1 0 0 1-1.625.781L16 24.281l-9.375 7.5A1 1 0 0 1 5 31V4a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4z" />
+                    </g>
+                  </svg>
+                </span>
+                {isBookmarking && (
+                  <span
+                    className="absolute inset-0 flex items-center justify-center rounded-full"
+                    style={{ backgroundColor: t.bg, color: t.accent }}
+                  >
+                    <Loader2 className="size-4 animate-spin" />
+                  </span>
+                )}
+              </label>
+            )}
             <button
               onClick={() => setShowSettings((v) => !v)}
               className={cn(
