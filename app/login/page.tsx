@@ -1,9 +1,21 @@
 "use client"
 
 import { getGoogleLoginUrl } from "@/lib/api-client"
-import { Moon } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
+
+const LOGO_SRC = "/logo.png"
+
+function BrandLogo({ className }: { className: string }) {
+  return (
+    <img
+      src={LOGO_SRC}
+      alt="LUMI"
+      className={`block object-contain ${className}`}
+      draggable={false}
+    />
+  )
+}
 
 function LoginContent() {
   const searchParams = useSearchParams()
@@ -14,11 +26,11 @@ function LoginContent() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,oklch(0.45_0.08_280_/_0.45),transparent_34%),radial-gradient(circle_at_bottom_left,oklch(0.58_0.12_60_/_0.28),transparent_32%)]" />
       <section className="relative w-full max-w-md rounded-lg border border-border bg-card/80 p-6 shadow-2xl backdrop-blur">
         <div className="mb-6 flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
-            <Moon className="size-5" />
+          <span className="flex size-10 items-center justify-center overflow-hidden rounded-full border border-primary/40 bg-primary/10 p-1">
+            <BrandLogo className="h-full w-full" />
           </span>
           <div>
-            <h1 className="font-heading text-3xl tracking-tight">LUMI</h1>
+            <BrandLogo className="h-10 w-auto max-w-[150px]" />
             <p className="text-sm text-muted-foreground">
               Đăng nhập để dùng thư viện cá nhân.
             </p>

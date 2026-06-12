@@ -31,14 +31,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
-  Diamond,
   Heart,
   History,
   Library,
   LogIn,
   Loader2,
   LogOut,
-  Moon,
   Search,
   Sparkles,
   X,
@@ -57,10 +55,30 @@ const HEADER_HEIGHT = 72;
 const RIGHT_DOCK_GUTTER = 112;
 const PLAYER_HEIGHT = 92;
 const RECOMMENDED_PAGE_SIZE = 15;
+const LOGO_SRC = "/logo.png";
+
+function BrandLogo({
+  className,
+  alt = "LUMI",
+}: {
+  className: string;
+  alt?: string;
+}) {
+  return (
+    <img
+      src={LOGO_SRC}
+      alt={alt}
+      className={cn("block object-contain", className)}
+      draggable={false}
+    />
+  );
+}
 
 function getTabFromPathname(pathname: string | null): AppTab {
   const segment = pathname?.split("/").filter(Boolean)[0] ?? "discover";
-  return APP_TABS.includes(segment as AppTab) ? (segment as AppTab) : "discover";
+  return APP_TABS.includes(segment as AppTab)
+    ? (segment as AppTab)
+    : "discover";
 }
 
 function getTabHref(tab: AppTab) {
@@ -177,11 +195,11 @@ function LoginScreen({ error }: { error?: string | null }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,oklch(0.4_0.07_75_/_0.4),transparent_34%),radial-gradient(circle_at_bottom_left,oklch(0.5_0.1_60_/_0.24),transparent_32%)]" />
       <section className="relative w-full max-w-md rounded-2xl border border-border bg-card/80 p-6 shadow-2xl backdrop-blur">
         <div className="mb-6 flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
-            <Moon className="size-5" />
+          <span className="flex size-10 items-cflexenter justify-center overflow-hidden rounded-full border border-primary/40 bg-primary/10 p-1">
+            <BrandLogo className="h-full w-full" />
           </span>
           <div>
-            <h1 className="font-heading text-3xl tracking-tight">LUMI</h1>
+            <BrandLogo className="h-16 w-auto max-w-[150px]" />
             <p className="text-sm text-muted-foreground">
               Đăng nhập để lưu kệ sách, tiến độ đọc và playlist.
             </p>
@@ -209,13 +227,11 @@ function LoadingScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#141009]">
       <div className="flex items-center gap-3 rounded-2xl border border-[#332716] bg-[#1d160d]/90 px-5 py-4 text-[#d9b98a] shadow-2xl">
-        <span className="flex size-10 items-center justify-center rounded-xl border border-[#3a2d1a] bg-[#241b10]">
+        <span className="flex size-10 items-center justify-center rounded-xl border border-[#3a2d1a] bg-[#241b10] p-1.5">
           <Loader2 className="size-5 animate-spin" />
         </span>
         <div>
-          <p className="font-heading text-lg leading-none text-[#f0e6d2]">
-            LUMI
-          </p>
+          <BrandLogo className="h-16 w-auto max-w-[112px]" />
           <p className="mt-1 text-xs text-[#8a744f]">Đang mở thư viện...</p>
         </div>
       </div>
@@ -312,13 +328,11 @@ function AppSidebar({
       style={{ width: SIDEBAR_WIDTH }}
     >
       <div className="mb-7 flex items-center gap-3 px-3">
-        <span className="flex size-10 items-center justify-center rounded-xl border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a] shadow-[0_8px_20px_rgba(0,0,0,0.3)]">
-          <Diamond className="size-5" />
-        </span>
+        {/* <span className="flex size-10 items-center justify-center overflow-hidden rounded-xl border border-[#3a2d1a] bg-[#241b10] p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.3)]">
+          <BrandLogo className="h-full w-full" />
+        </span> */}
         <div className="min-w-0">
-          <p className="text-lg font-bold leading-none tracking-wide text-[#ecdfc5]">
-            LUMI
-          </p>
+          <BrandLogo className="h-16 w-auto" />
           <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
             Không gian đọc
           </p>
@@ -838,17 +852,14 @@ export default function Page() {
   const [activeTab, setActiveTabState] = useState<AppTab>(() =>
     getTabFromPathname(pathname),
   );
-  const setActiveTab = useCallback(
-    (tab: AppTab) => {
-      const href = getTabHref(tab);
-      setActiveTabState(tab);
+  const setActiveTab = useCallback((tab: AppTab) => {
+    const href = getTabHref(tab);
+    setActiveTabState(tab);
 
-      if (typeof window !== "undefined" && window.location.pathname !== href) {
-        window.history.pushState({ tab }, "", href);
-      }
-    },
-    [],
-  );
+    if (typeof window !== "undefined" && window.location.pathname !== href) {
+      window.history.pushState({ tab }, "", href);
+    }
+  }, []);
   const [books, setBooks] = useState<Book[]>([]);
   const [allBooks, setAllBooks] = useState<Book[]>([]);
   const [libraryBooks, setLibraryBooks] = useState<Book[]>([]);
@@ -950,7 +961,9 @@ export default function Page() {
         if (mode === "replace") return mappedBooks;
 
         const existingIds = new Set(currentBooks.map((book) => book.id));
-        const nextBooks = mappedBooks.filter((book) => !existingIds.has(book.id));
+        const nextBooks = mappedBooks.filter(
+          (book) => !existingIds.has(book.id),
+        );
         return [...currentBooks, ...nextBooks];
       });
       setRecommendedPage(bookData.page ?? page);
@@ -1246,8 +1259,9 @@ export default function Page() {
           {!user ? (
             <section className="flex min-h-[calc(100vh-280px)] items-center justify-center">
               <div className="w-full max-w-md rounded-2xl border border-[#332716] bg-[#1d160d]/90 p-6 text-center shadow-2xl backdrop-blur">
-                <h1 className="font-heading text-3xl text-[#f0e6d2]">
-                  Đăng nhập LUMI
+                <h1 className="flex items-center justify-center gap-3 font-heading text-3xl text-[#f0e6d2]">
+                  <span>Đăng nhập</span>
+                  <BrandLogo className="h-16 w-auto max-w-[130px]" />
                 </h1>
                 <p className="mt-2 text-sm text-[#b3a285]">
                   Đăng nhập Google để lưu kệ sách, tiến độ đọc và playlist cá
