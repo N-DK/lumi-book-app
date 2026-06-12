@@ -1131,9 +1131,6 @@ export function MusicPlayer({
             <span className="rounded-md bg-[#d9b98a]/15 px-2 py-1 font-semibold text-[#e9d2a6]">
               {activeIsYoutube ? "YouTube" : "MP3"}
             </span>
-            <span className="min-w-0 truncate px-3">
-              {playlist?.name ?? "Nhạc yêu thích"}
-            </span>
             <ListMusic className="size-4" />
           </div>
         </div>
