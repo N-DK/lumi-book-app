@@ -1349,7 +1349,7 @@ export default function Page() {
       </aside>
 
       {user && (
-        <div className="fixed inset-x-0 bottom-0 z-[85]">
+        <div className="fixed inset-x-0 bottom-0 z-[100]">
           <MusicPlayer
             playlist={defaultPlaylist}
             onAddTrack={handleAddTrack}
