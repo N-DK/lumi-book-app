@@ -36,6 +36,11 @@ const musicTrackSchema = new mongoose.Schema(
       type: String,
       default: "user",
     },
+    sourceUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   { timestamps: true },
 );

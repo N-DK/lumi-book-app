@@ -1,5 +1,7 @@
 allowBuilds:
-  core-js: set this to true or false
-  es5-ext: set this to true or false
-  msw: set this to true or false
-  sharp: set this to true or false
+  '@ffmpeg-installer/linux-x64': true
+  core-js: false
+  es5-ext: false
+  msw: false
+  sharp: false
+  youtube-dl-exec: true

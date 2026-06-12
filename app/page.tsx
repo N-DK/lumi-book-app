@@ -10,6 +10,7 @@ import {
   type ApiPlaylist,
   type AuthUser,
   getCurrentUser,
+  getYoutubeTrackInfo,
   listBooks,
   listBookmarks,
   listCategories,
@@ -1353,6 +1354,10 @@ export default function Page() {
             playlist={defaultPlaylist}
             onAddTrack={handleAddTrack}
             onRemoveTrack={handleRemoveTrack}
+            onResolveYoutubeUrl={async (url) => {
+              const data = await getYoutubeTrackInfo(url);
+              return data.track;
+            }}
           />
         </div>
       )}

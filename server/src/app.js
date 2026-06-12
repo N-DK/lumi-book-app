@@ -13,6 +13,7 @@ const bookmarkRoutes = require("./routes/bookmarkRoutes");
 const playlistRoutes = require("./routes/playlistRoutes");
 const progressRoutes = require("./routes/progressRoutes");
 const userRoutes = require("./routes/userRoutes");
+const youtubeRoutes = require("./routes/youtubeRoutes");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
@@ -61,6 +62,7 @@ app.use("/api/books", bookRoutes);
 app.use("/api/bookmarks", bookmarkRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/playlists", playlistRoutes);
+app.use("/api/youtube", youtubeRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: `Không tìm thấy route ${req.method} ${req.path}` });

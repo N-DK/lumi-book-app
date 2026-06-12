@@ -1,27 +1,35 @@
 "use client";
 
 import { ProgressSlider } from "@/components/progress-slider";
-import type { ApiPlaylist, ApiTrack, TrackPayload } from "@/lib/api-client";
+import type {
+  ApiPlaylist,
+  ApiTrack,
+  TrackPayload,
+  YoutubeTrackInfo,
+} from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
+  Link as LinkIcon,
   ListMusic,
   Loader2,
   Pause,
   Play,
   Plus,
   Repeat,
+  Save,
   SkipBack,
   SkipForward,
   Trash2,
   Upload,
   Volume2,
 } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 interface MusicPlayerProps {
   playlist?: ApiPlaylist;
   onAddTrack: (payload: TrackPayload) => Promise<void>;
   onRemoveTrack: (trackId: string) => Promise<void>;
+  onResolveYoutubeUrl: (url: string) => Promise<YoutubeTrackInfo>;
 }
 
 function formatTime(s: number) {
@@ -34,6 +42,11 @@ function formatTime(s: number) {
 function clampIndex(index: number, total: number) {
   if (total <= 0) return 0;
   return Math.min(Math.max(index, 0), total - 1);
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return "Không xử lý được bài nhạc này.";
 }
 
 function readBlobAsDataUrl(blob: Blob) {
@@ -133,6 +146,7 @@ export function MusicPlayer({
   playlist,
   onAddTrack,
   onRemoveTrack,
+  onResolveYoutubeUrl,
 }: MusicPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [current, setCurrent] = useState(0);
@@ -144,16 +158,30 @@ export function MusicPlayer({
   const [showList, setShowList] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [removingTrackId, setRemovingTrackId] = useState("");
-  const [draft, setDraft] = useState({
-    title: "",
-    artist: "",
-    audioUrl: "",
-    coverUrl: "",
-  });
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubePreview, setYoutubePreview] =
+    useState<YoutubeTrackInfo | null>(null);
+  const [addError, setAddError] = useState("");
 
   const tracks = playlist?.tracks ?? [];
   const track = tracks[current];
+  const previewTrack = useMemo<ApiTrack | null>(() => {
+    if (!youtubePreview) return null;
+    return {
+      id: `youtube-preview-${youtubePreview.sourceUrl}`,
+      title: youtubePreview.title,
+      artist: youtubePreview.artist,
+      audioUrl: youtubePreview.audioUrl,
+      coverUrl: youtubePreview.coverUrl,
+      duration: youtubePreview.duration,
+      source: "youtube-preview",
+      sourceUrl: youtubePreview.sourceUrl,
+    };
+  }, [youtubePreview]);
+  const activeTrack = previewTrack ?? track;
+  const isPreviewing = Boolean(previewTrack);
 
   useEffect(() => {
     setCurrent((index) => clampIndex(index, tracks.length));
@@ -167,23 +195,24 @@ export function MusicPlayer({
 
   useEffect(() => {
     setProgress(0);
-    setDuration(0);
-  }, [track?.id]);
+    setDuration(activeTrack?.duration ?? 0);
+  }, [activeTrack?.id, activeTrack?.duration]);
 
   useEffect(() => {
     const a = audioRef.current;
-    if (!a || !track) return;
+    if (!a || !activeTrack) return;
     if (playing) {
       void a.play().catch(() => setPlaying(false));
     } else {
       a.pause();
     }
-  }, [playing, track]);
+  }, [playing, activeTrack]);
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
 
     setSaving(true);
+    setAddError("");
     try {
       for (const file of Array.from(files)) {
         const [audioUrl, coverBlob] = await Promise.all([
@@ -201,27 +230,58 @@ export function MusicPlayer({
         });
       }
 
+      setYoutubePreview(null);
+      setYoutubeUrl("");
       setShowAdd(false);
+    } catch (error) {
+      setAddError(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleResolveYoutube(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft.title.trim() || !draft.audioUrl.trim()) return;
+    const url = youtubeUrl.trim();
+    if (!url) return;
+
+    setResolving(true);
+    setAddError("");
+    try {
+      const trackInfo = await onResolveYoutubeUrl(url);
+      setYoutubePreview(trackInfo);
+      setShowList(false);
+      setPlaying(true);
+    } catch (error) {
+      setYoutubePreview(null);
+      setAddError(getErrorMessage(error));
+      setPlaying(false);
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function handleSaveYoutube() {
+    if (!youtubePreview) return;
 
     setSaving(true);
+    setAddError("");
     try {
       await onAddTrack({
-        title: draft.title.trim(),
-        artist: draft.artist.trim() || "Tệp của bạn",
-        audioUrl: draft.audioUrl.trim(),
-        coverUrl: draft.coverUrl.trim(),
-        source: "url",
+        title: youtubePreview.title,
+        artist: youtubePreview.artist,
+        audioUrl: youtubePreview.audioUrl,
+        coverUrl: youtubePreview.coverUrl,
+        duration: youtubePreview.duration,
+        source: "youtube",
+        sourceUrl: youtubePreview.sourceUrl,
       });
-      setDraft({ title: "", artist: "", audioUrl: "", coverUrl: "" });
+      setYoutubePreview(null);
+      setYoutubeUrl("");
+      setPlaying(false);
       setShowAdd(false);
+    } catch (error) {
+      setAddError(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -237,31 +297,43 @@ export function MusicPlayer({
   }
 
   function playIndex(i: number) {
+    setYoutubePreview(null);
     setCurrent(i);
     setPlaying(true);
   }
 
   function next() {
     if (tracks.length === 0) return;
+    setYoutubePreview(null);
     setCurrent((index) => (index + 1) % tracks.length);
     setPlaying(true);
   }
 
   function prev() {
     if (tracks.length === 0) return;
+    setYoutubePreview(null);
     setCurrent((index) => (index - 1 + tracks.length) % tracks.length);
     setPlaying(true);
+  }
+
+  function handleEnded() {
+    if (loop) return;
+    if (isPreviewing) {
+      setPlaying(false);
+      return;
+    }
+    next();
   }
 
   return (
     <div className="relative border-t border-[#2b2115] bg-[#16110a]/[0.97] px-6 py-3 text-[#ecdfc5] backdrop-blur-xl">
       <audio
         ref={audioRef}
-        src={track?.audioUrl}
+        src={activeTrack?.audioUrl}
         loop={loop}
         onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onEnded={() => (loop ? null : next())}
+        onEnded={handleEnded}
       />
 
       <div className="flex items-center gap-6">
@@ -272,9 +344,9 @@ export function MusicPlayer({
               playing && "lumi-spin",
             )}
           >
-            {track?.coverUrl ? (
+            {activeTrack?.coverUrl ? (
               <img
-                src={track.coverUrl}
+                src={activeTrack.coverUrl}
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover"
                 draggable={false}
@@ -290,10 +362,14 @@ export function MusicPlayer({
 
           <div className="min-w-0">
             <p className="truncate font-heading text-sm leading-tight text-[#f0e6d2]">
-              {track ? track.title : "Chưa có bài hát"}
+              {activeTrack ? activeTrack.title : "Chưa có bài hát"}
             </p>
             <p className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-[0.24em] text-[#a8895c]">
-              {track ? track.artist : "Thêm nhạc để bắt đầu"}
+              {activeTrack
+                ? isPreviewing
+                  ? `${activeTrack.artist} · nghe thử`
+                  : activeTrack.artist
+                : "Thêm nhạc để bắt đầu"}
             </p>
           </div>
         </div>
@@ -309,7 +385,7 @@ export function MusicPlayer({
             </button>
             <button
               onClick={() => setPlaying((value) => !value)}
-              disabled={!track}
+              disabled={!activeTrack}
               className="flex size-11 items-center justify-center rounded-full bg-[#d9b98a] text-[#241b10] shadow-[0_8px_24px_rgba(217,185,138,0.25)] transition hover:brightness-110 disabled:opacity-40"
               aria-label={playing ? "Tạm dừng" : "Phát"}
             >
@@ -348,7 +424,7 @@ export function MusicPlayer({
               max={duration || 0}
               value={progress}
               step={1}
-              disabled={!track || duration <= 0}
+              disabled={!activeTrack || duration <= 0}
               onChange={(value) => {
                 const audio = audioRef.current;
                 if (audio) audio.currentTime = value;
@@ -393,7 +469,10 @@ export function MusicPlayer({
           </button>
 
           <button
-            onClick={() => setShowAdd((value) => !value)}
+            onClick={() => {
+              setShowAdd((value) => !value);
+              setShowList(false);
+            }}
             className={cn(
               "flex items-center gap-2 rounded-lg border border-[#3a2d1a] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] transition hover:border-[#d9b98a]/50 hover:text-[#ecdfc5]",
               showAdd ? "text-[#d9b98a]" : "text-[#a3937a]",
@@ -401,7 +480,7 @@ export function MusicPlayer({
             aria-label="Thêm nhạc"
             aria-pressed={showAdd}
           >
-            {saving ? (
+            {saving || resolving ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (
               <Plus className="size-3.5" />
@@ -413,45 +492,77 @@ export function MusicPlayer({
 
       {showAdd && (
         <form
-          onSubmit={(event) => void handleSubmit(event)}
-          className="absolute inset-x-0 bottom-full mb-2 space-y-2 rounded-lg border border-white/[0.10] bg-[#1d160d]/95 p-3 text-white shadow-2xl backdrop-blur-xl"
+          onSubmit={(event) => void handleResolveYoutube(event)}
+          className="absolute bottom-full right-6 mb-3 w-[min(680px,calc(100vw-2rem))] rounded-2xl border border-white/[0.10] bg-[#1d160d]/95 p-4 text-white shadow-2xl backdrop-blur-xl"
         >
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="flex items-center gap-2 rounded-xl border border-[#3a2d1a] bg-black/[0.28] px-3">
+            <LinkIcon className="size-4 shrink-0 text-[#d9b98a]" />
             <input
-              value={draft.title}
-              onChange={(e) =>
-                setDraft((value) => ({ ...value, title: e.target.value }))
-              }
-              className="h-9 rounded-md border border-white/[0.10] bg-black/[0.28] px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-[#d9b98a]"
-              placeholder="Tên bài"
+              value={youtubeUrl}
+              onChange={(e) => {
+                setYoutubeUrl(e.target.value);
+                setAddError("");
+              }}
+              className="h-11 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+              placeholder="Dán URL YouTube để nghe thử..."
             />
-            <input
-              value={draft.artist}
-              onChange={(e) =>
-                setDraft((value) => ({ ...value, artist: e.target.value }))
-              }
-              className="h-9 rounded-md border border-white/[0.10] bg-black/[0.28] px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-[#d9b98a]"
-              placeholder="Nghệ sĩ"
-            />
+            <button
+              type="submit"
+              disabled={resolving || !youtubeUrl.trim()}
+              className="flex h-8 shrink-0 items-center gap-2 rounded-lg bg-[#d9b98a] px-3 text-xs font-semibold text-[#241b10] transition hover:brightness-110 disabled:opacity-40"
+            >
+              {resolving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Nghe thử
+            </button>
           </div>
-          <input
-            value={draft.audioUrl}
-            onChange={(e) =>
-              setDraft((value) => ({ ...value, audioUrl: e.target.value }))
-            }
-            className="h-9 w-full rounded-md border border-white/[0.10] bg-black/[0.28] px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-[#d9b98a]"
-            placeholder="Audio URL hoặc chọn file bên dưới"
-          />
-          <input
-            value={draft.coverUrl}
-            onChange={(e) =>
-              setDraft((value) => ({ ...value, coverUrl: e.target.value }))
-            }
-            className="h-9 w-full rounded-md border border-white/[0.10] bg-black/[0.28] px-3 text-xs text-white outline-none placeholder:text-white/35 focus:border-[#d9b98a]"
-            placeholder="Cover URL"
-          />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-white/[0.14] px-3 py-2 text-xs text-white/50 transition hover:border-[#d9b98a] hover:text-white">
+
+          {addError && (
+            <p className="mt-3 rounded-lg border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-100">
+              {addError}
+            </p>
+          )}
+
+          {youtubePreview && (
+            <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#3a2d1a] bg-[#241b10]/70 p-3">
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-white/[0.10] bg-black/30">
+                {youtubePreview.coverUrl ? (
+                  <img
+                    src={youtubePreview.coverUrl}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    draggable={false}
+                  />
+                ) : null}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-heading text-base text-[#f0e6d2]">
+                  {youtubePreview.title}
+                </p>
+                <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
+                  {youtubePreview.artist} · {formatTime(youtubePreview.duration ?? 0)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleSaveYoutube()}
+                disabled={saving}
+                className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-[#d9b98a]/40 bg-[#d9b98a]/[0.12] px-4 text-xs font-semibold text-[#e9d2a6] transition hover:bg-[#d9b98a]/[0.20] disabled:opacity-45"
+              >
+                {saving ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Save className="size-3.5" />
+                )}
+                Lưu vào Nhạc yêu thích
+              </button>
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.08] pt-3">
+            <p className="text-[11px] text-white/[0.42]">
+              Chỉ lưu những bài bạn có quyền sử dụng.
+            </p>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/[0.14] px-3 py-2 text-xs text-white/50 transition hover:border-[#d9b98a] hover:text-white">
               <Upload className="size-3.5" />
               Tệp nhạc
               <input
@@ -465,13 +576,6 @@ export function MusicPlayer({
                 }}
               />
             </label>
-            <button
-              type="submit"
-              disabled={saving || !draft.title.trim() || !draft.audioUrl.trim()}
-              className="rounded-md bg-[#d9b98a] px-3 py-2 text-xs font-medium text-[#241b10] transition hover:brightness-110 disabled:opacity-40"
-            >
-              Lưu bài hát
-            </button>
           </div>
         </form>
       )}
@@ -488,7 +592,9 @@ export function MusicPlayer({
               key={item.id}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition hover:bg-white/[0.08]",
-                i === current && "bg-white/[0.08] text-[#d9b98a]",
+                i === current &&
+                  !isPreviewing &&
+                  "bg-white/[0.08] text-[#d9b98a]",
               )}
             >
               <button
@@ -496,7 +602,7 @@ export function MusicPlayer({
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
               >
                 <span className="flex w-6 shrink-0 justify-center text-white/45">
-                  {i === current && playing ? (
+                  {i === current && playing && !isPreviewing ? (
                     <span className="flex h-3 items-end justify-center gap-[2px]">
                       <span
                         className="w-[2px] bg-[#d9b98a]"

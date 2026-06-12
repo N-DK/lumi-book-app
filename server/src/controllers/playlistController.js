@@ -2,19 +2,28 @@ const Playlist = require("../models/Playlist");
 const MusicTrack = require("../models/MusicTrack");
 const asyncHandler = require("../utils/asyncHandler");
 
+const DEFAULT_PLAYLIST_NAME = "Nhạc yêu thích";
+
 async function ensureDefaultPlaylist(userId) {
-  return Playlist.findOneAndUpdate(
+  const playlist = await Playlist.findOneAndUpdate(
     { user: userId, isDefault: true },
     {
       $setOnInsert: {
         user: userId,
-        name: "Nhạc của tôi",
+        name: DEFAULT_PLAYLIST_NAME,
         isDefault: true,
         tracks: [],
       },
     },
     { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
-  ).populate("tracks");
+  );
+
+  if (playlist.name !== DEFAULT_PLAYLIST_NAME) {
+    playlist.name = DEFAULT_PLAYLIST_NAME;
+    await playlist.save();
+  }
+
+  return playlist.populate("tracks");
 }
 
 const listPlaylists = asyncHandler(async (req, res) => {
@@ -77,6 +86,7 @@ const addTrack = asyncHandler(async (req, res) => {
     coverUrl: req.body.coverUrl || "",
     duration: Number(req.body.duration) || 0,
     source: req.body.source || "user",
+    sourceUrl: req.body.sourceUrl || "",
   });
 
   playlist.tracks.push(track._id);

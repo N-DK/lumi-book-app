@@ -7,7 +7,7 @@ import type {
 } from "@/lib/lumi-data"
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api"
+  process.env.NEXT_PUBLIC_API_URL ?? "/api"
 
 export interface AuthUser {
   id: string
@@ -45,6 +45,7 @@ export interface ApiTrack {
   coverUrl?: string
   duration?: number
   source?: string
+  sourceUrl?: string
 }
 
 export interface ApiPlaylist {
@@ -93,6 +94,18 @@ export interface TrackPayload {
   coverUrl?: string
   duration?: number
   source?: string
+  sourceUrl?: string
+}
+
+export interface YoutubeTrackInfo {
+  id?: string
+  title: string
+  artist: string
+  audioUrl: string
+  coverUrl?: string
+  duration?: number
+  source: "youtube"
+  sourceUrl: string
 }
 
 export class ApiError extends Error {
@@ -355,6 +368,11 @@ export async function addTrackToPlaylist(
       body: JSON.stringify(payload),
     },
   )
+}
+
+export async function getYoutubeTrackInfo(url: string) {
+  const params = new URLSearchParams({ url })
+  return apiFetch<{ track: YoutubeTrackInfo }>(`/youtube/info?${params}`)
 }
 
 export async function removeTrackFromPlaylist(
