@@ -108,6 +108,13 @@ export interface YoutubeTrackInfo {
   sourceUrl: string
 }
 
+export interface YoutubeSearchResult {
+  tracks: YoutubeTrackInfo[]
+  offset: number
+  limit: number
+  hasMore: boolean
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -373,6 +380,15 @@ export async function addTrackToPlaylist(
 export async function getYoutubeTrackInfo(url: string) {
   const params = new URLSearchParams({ url })
   return apiFetch<{ track: YoutubeTrackInfo }>(`/youtube/info?${params}`)
+}
+
+export async function searchYoutubeTracks(query: string, limit = 5, offset = 0) {
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(limit),
+    offset: String(offset),
+  })
+  return apiFetch<YoutubeSearchResult>(`/youtube/search?${params}`)
 }
 
 export async function removeTrackFromPlaylist(

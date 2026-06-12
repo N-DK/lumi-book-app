@@ -21,6 +21,7 @@ import {
   saveBookmark,
   saveReadingProgress,
   addTrackToPlaylist,
+  searchYoutubeTracks,
   toReaderBook,
   type TrackPayload,
 } from "@/lib/api-client";
@@ -1357,6 +1358,13 @@ export default function Page() {
             onResolveYoutubeUrl={async (url) => {
               const data = await getYoutubeTrackInfo(url);
               return data.track;
+            }}
+            onSearchYoutube={(query, options) => {
+              return searchYoutubeTracks(
+                query,
+                options?.limit,
+                options?.offset,
+              );
             }}
           />
         </div>

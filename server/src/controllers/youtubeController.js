@@ -2,6 +2,7 @@ const {
   getYoutubeAudioUrl,
   getYoutubeInfo,
   normalizeYoutubeUrl,
+  searchYoutubeVideos,
   streamYoutubeMp3,
 } = require("../services/youtubeAudioService");
 const asyncHandler = require("../utils/asyncHandler");
@@ -23,7 +24,16 @@ const streamYoutubeAudio = asyncHandler(async (req, res) => {
   await streamYoutubeMp3(sourceUrl, res);
 });
 
+const searchYoutubeTracks = asyncHandler(async (req, res) => {
+  const result = await searchYoutubeVideos(req.query.q, {
+    limit: req.query.limit,
+    offset: req.query.offset,
+  });
+  res.json(result);
+});
+
 module.exports = {
   getYoutubeTrackInfo,
+  searchYoutubeTracks,
   streamYoutubeAudio,
 };

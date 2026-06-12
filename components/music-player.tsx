@@ -5,6 +5,7 @@ import type {
   ApiPlaylist,
   ApiTrack,
   TrackPayload,
+  YoutubeSearchResult,
   YoutubeTrackInfo,
 } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,13 @@ interface MusicPlayerProps {
   onAddTrack: (payload: TrackPayload) => Promise<void>;
   onRemoveTrack: (trackId: string) => Promise<void>;
   onResolveYoutubeUrl: (url: string) => Promise<YoutubeTrackInfo>;
+  onSearchYoutube: (
+    query: string,
+    options?: { limit?: number; offset?: number },
+  ) => Promise<YoutubeSearchResult>;
 }
+
+const YOUTUBE_SEARCH_PAGE_SIZE = 5;
 
 function formatTime(s: number) {
   if (!Number.isFinite(s)) return "0:00";
@@ -196,20 +203,6 @@ function getYoutubeEmbedUrl(value: string, autoplay = false) {
   return `https://www.youtube.com/embed/${videoId}?${params}`;
 }
 
-function getYoutubeSearchEmbedUrl(query: string) {
-  const trimmed = query.trim();
-  if (!trimmed || getYoutubeVideoId(trimmed)) return "";
-
-  const params = new URLSearchParams({
-    listType: "search",
-    list: trimmed,
-    rel: "0",
-    modestbranding: "1",
-  });
-
-  return `https://www.youtube.com/embed?${params}`;
-}
-
 function isYoutubeTrack(
   track?: Pick<ApiTrack, "source" | "audioUrl" | "sourceUrl"> | null,
 ) {
@@ -221,13 +214,37 @@ function isYoutubeTrack(
   );
 }
 
+function getYoutubeResultKey(track: YoutubeTrackInfo) {
+  return track.sourceUrl || track.audioUrl || track.id || track.title;
+}
+
+function mergeYoutubeResults(
+  current: YoutubeTrackInfo[],
+  incoming: YoutubeTrackInfo[],
+) {
+  const seen = new Set(current.map(getYoutubeResultKey));
+  const next = [...current];
+
+  for (const track of incoming) {
+    const key = getYoutubeResultKey(track);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    next.push(track);
+  }
+
+  return next;
+}
+
 export function MusicPlayer({
   playlist,
   onAddTrack,
   onRemoveTrack,
   onResolveYoutubeUrl,
+  onSearchYoutube,
 }: MusicPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const loadingMoreYoutubeRef = useRef(false);
+  const youtubeSearchQueryRef = useRef("");
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(false);
@@ -239,10 +256,15 @@ export function MusicPlayer({
   const [showYoutubeFrame, setShowYoutubeFrame] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [loadingMoreYoutube, setLoadingMoreYoutube] = useState(false);
   const [removingTrackId, setRemovingTrackId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [youtubePreview, setYoutubePreview] =
-    useState<YoutubeTrackInfo | null>(null);
+  const [youtubeResults, setYoutubeResults] = useState<YoutubeTrackInfo[]>([]);
+  const [youtubeSearchQuery, setYoutubeSearchQuery] = useState("");
+  const [youtubeHasMore, setYoutubeHasMore] = useState(false);
+  const [youtubePreview, setYoutubePreview] = useState<YoutubeTrackInfo | null>(
+    null,
+  );
   const [addError, setAddError] = useState("");
 
   const tracks = playlist?.tracks ?? [];
@@ -269,11 +291,6 @@ export function MusicPlayer({
         playing,
       )
     : "";
-  const youtubeInput = youtubeUrl.trim();
-  const youtubeFrameUrl =
-    youtubePreview
-      ? getYoutubeEmbedUrl(youtubePreview.sourceUrl)
-      : getYoutubeEmbedUrl(youtubeInput) || getYoutubeSearchEmbedUrl(youtubeInput);
   const canUseTransport = Boolean(activeTrack);
   const progressDisabled = !canUseTransport || activeIsYoutube || duration <= 0;
 
@@ -289,7 +306,7 @@ export function MusicPlayer({
 
   useEffect(() => {
     setProgress(0);
-    setDuration(activeIsYoutube ? 0 : activeTrack?.duration ?? 0);
+    setDuration(activeIsYoutube ? 0 : (activeTrack?.duration ?? 0));
   }, [activeTrack?.id, activeTrack?.duration, activeIsYoutube]);
 
   useEffect(() => {
@@ -306,6 +323,10 @@ export function MusicPlayer({
   useEffect(() => {
     if (activeIsYoutube) setShowYoutubeFrame(true);
   }, [activeIsYoutube, activeTrack?.id]);
+
+  useEffect(() => {
+    youtubeSearchQueryRef.current = youtubeSearchQuery;
+  }, [youtubeSearchQuery]);
 
   useEffect(() => {
     const a = audioRef.current;
@@ -340,6 +361,9 @@ export function MusicPlayer({
       }
 
       setYoutubePreview(null);
+      setYoutubeResults([]);
+      setYoutubeSearchQuery("");
+      setYoutubeHasMore(false);
       setYoutubeUrl("");
       setShowAdd(false);
     } catch (error) {
@@ -349,33 +373,54 @@ export function MusicPlayer({
     }
   }
 
+  function selectYoutubeTrack(trackInfo: YoutubeTrackInfo) {
+    const sourceUrl = getYoutubeWatchUrl(
+      trackInfo.sourceUrl || trackInfo.audioUrl,
+    );
+    setYoutubePreview({
+      ...trackInfo,
+      audioUrl: sourceUrl,
+      coverUrl: trackInfo.coverUrl || getYoutubeCoverUrl(sourceUrl),
+      source: "youtube",
+      sourceUrl,
+    });
+    setShowList(false);
+    setShowYoutubeFrame(true);
+    setPlaying(true);
+  }
+
   async function handleResolveYoutube(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const url = youtubeUrl.trim();
-    if (!url) return;
+    const query = youtubeUrl.trim();
+    if (!query) return;
 
     setResolving(true);
     setAddError("");
-    setYoutubePreview(null);
-    setPlaying(false);
+    setYoutubeResults([]);
+    setYoutubeSearchQuery("");
+    setYoutubeHasMore(false);
     try {
-      if (!getYoutubeVideoId(url)) {
-        throw new Error("Dán link video YouTube để lưu vào Nhạc yêu thích.");
+      if (getYoutubeVideoId(query)) {
+        const trackInfo = await onResolveYoutubeUrl(query);
+        selectYoutubeTrack(trackInfo);
+        return;
       }
 
-      const trackInfo = await onResolveYoutubeUrl(url);
-      setYoutubePreview({
-        ...trackInfo,
-        audioUrl: trackInfo.sourceUrl,
-        sourceUrl: getYoutubeWatchUrl(trackInfo.sourceUrl),
+      const result = await onSearchYoutube(query, {
+        limit: YOUTUBE_SEARCH_PAGE_SIZE,
+        offset: 0,
       });
-      setShowList(false);
-      setPlaying(true);
+      setYoutubeSearchQuery(query);
+      setYoutubeResults(result.tracks);
+      setYoutubeHasMore(result.hasMore);
+      if (result.tracks.length === 0) {
+        setAddError("Không tìm thấy video phù hợp.");
+      }
     } catch (error) {
-      const videoId = getYoutubeVideoId(url);
+      const videoId = getYoutubeVideoId(query);
       if (videoId) {
-        const sourceUrl = getYoutubeWatchUrl(url);
-        setYoutubePreview({
+        const sourceUrl = getYoutubeWatchUrl(query);
+        selectYoutubeTrack({
           id: videoId,
           title: "Video YouTube",
           artist: "YouTube",
@@ -384,15 +429,45 @@ export function MusicPlayer({
           source: "youtube",
           sourceUrl,
         });
-        setShowList(false);
-        setPlaying(true);
       } else {
-        setYoutubePreview(null);
         setAddError(getErrorMessage(error));
-        setPlaying(false);
       }
     } finally {
       setResolving(false);
+    }
+  }
+
+  async function loadMoreYoutubeResults() {
+    const query = youtubeSearchQuery.trim();
+    if (
+      !query ||
+      !youtubeHasMore ||
+      resolving ||
+      loadingMoreYoutube ||
+      loadingMoreYoutubeRef.current
+    ) {
+      return;
+    }
+
+    loadingMoreYoutubeRef.current = true;
+    setLoadingMoreYoutube(true);
+    setAddError("");
+    try {
+      const result = await onSearchYoutube(query, {
+        limit: YOUTUBE_SEARCH_PAGE_SIZE,
+        offset: youtubeResults.length,
+      });
+      if (youtubeSearchQueryRef.current !== query) return;
+      setYoutubeResults((current) =>
+        mergeYoutubeResults(current, result.tracks),
+      );
+      setYoutubeHasMore(result.hasMore);
+    } catch (error) {
+      setYoutubeHasMore(false);
+      setAddError(getErrorMessage(error));
+    } finally {
+      loadingMoreYoutubeRef.current = false;
+      setLoadingMoreYoutube(false);
     }
   }
 
@@ -412,6 +487,9 @@ export function MusicPlayer({
         sourceUrl: youtubePreview.sourceUrl,
       });
       setYoutubePreview(null);
+      setYoutubeResults([]);
+      setYoutubeSearchQuery("");
+      setYoutubeHasMore(false);
       setYoutubeUrl("");
       setPlaying(false);
       setShowAdd(false);
@@ -683,7 +761,9 @@ export function MusicPlayer({
               value={youtubeUrl}
               onChange={(e) => {
                 setYoutubeUrl(e.target.value);
-                setYoutubePreview(null);
+                setYoutubeResults([]);
+                setYoutubeSearchQuery("");
+                setYoutubeHasMore(false);
                 setAddError("");
               }}
               className="h-11 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
@@ -695,20 +775,59 @@ export function MusicPlayer({
               className="flex h-8 shrink-0 items-center gap-2 rounded-lg bg-[#d9b98a] px-3 text-xs font-semibold text-[#241b10] transition hover:brightness-110 disabled:opacity-40"
             >
               {resolving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {resolving ? "Đang lấy" : "Lấy video"}
+              {resolving ? "Đang tìm" : "Tìm"}
             </button>
           </div>
 
-          {youtubeFrameUrl && (
-            <div className="mt-3 overflow-hidden rounded-xl border border-[#3a2d1a] bg-black/35">
-              <iframe
-                key={youtubeFrameUrl}
-                src={youtubeFrameUrl}
-                title="YouTube"
-                className="aspect-video w-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+          {youtubeResults.length > 0 && (
+            <div
+              onScroll={(event) => {
+                const target = event.currentTarget;
+                const distanceFromBottom =
+                  target.scrollHeight - target.scrollTop - target.clientHeight;
+                if (distanceFromBottom < 80) void loadMoreYoutubeResults();
+              }}
+              className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-xl border border-[#3a2d1a] bg-black/[0.22] p-2 lumi-scroll"
+            >
+              {youtubeResults.map((item) => (
+                <button
+                  key={item.sourceUrl || item.id || item.title}
+                  type="button"
+                  onClick={() => selectYoutubeTrack(item)}
+                  className="group flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-white/[0.08]"
+                >
+                  <span className="relative h-14 w-24 shrink-0 overflow-hidden rounded-md border border-white/[0.10] bg-black/30">
+                    {item.coverUrl ? (
+                      <img
+                        src={item.coverUrl}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                        draggable={false}
+                      />
+                    ) : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="line-clamp-2 text-sm font-semibold text-[#f0e6d2]">
+                      {item.title}
+                    </span>
+                    <span className="mt-1 block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
+                      {item.artist || "YouTube"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-lg border border-[#d9b98a]/30 px-2 py-1 text-[10px] font-semibold text-[#d9b98a] opacity-75 transition group-hover:opacity-100">
+                    Chọn
+                  </span>
+                </button>
+              ))}
+              {(youtubeHasMore || loadingMoreYoutube) && (
+                <div className="flex h-10 items-center justify-center text-[#d9b98a]/80">
+                  {loadingMoreYoutube ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <span className="h-px w-10 rounded-full bg-[#d9b98a]/30" />
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -802,7 +921,9 @@ export function MusicPlayer({
                     <span className="flex h-3 items-end justify-center gap-[2px]">
                       <span
                         className="w-[2px] bg-[#d9b98a]"
-                        style={{ animation: "lumi-eq 0.8s ease-in-out infinite" }}
+                        style={{
+                          animation: "lumi-eq 0.8s ease-in-out infinite",
+                        }}
                       />
                       <span
                         className="w-[2px] bg-[#d9b98a]"
