@@ -11,6 +11,13 @@
   --font-heading: var(--font-playfair), "Georgia", serif;
   --font-serif: var(--font-playfair), "Georgia", serif;
   --font-sans: var(--font-geist-sans), "Geist Fallback";
+  --font-display: var(--font-playfair), "Georgia", serif;
+  --font-body: var(--font-geist-sans), "Geist Fallback";
+  /* LUMI brand tokens (theo thiết kế) */
+  --color-ink: #1a1410;
+  --color-shelf: #2d211a;
+  --color-paper: #f5ecd9;
+  --color-oak: #3d2e24;
   --color-gold: var(--gold);
   --color-terracotta: var(--terracotta);
   --color-sidebar-ring: var(--sidebar-ring);

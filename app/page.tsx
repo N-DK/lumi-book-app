@@ -10,7 +10,6 @@ import {
   type ApiPlaylist,
   type AuthUser,
   getCurrentUser,
-  getGoogleLoginUrl,
   listBooks,
   listBookmarks,
   listCategories,
@@ -41,7 +40,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type AppTab = "discover" | "for-you" | "me" | "favorites" | "recent";
@@ -186,40 +185,6 @@ function SearchBookCover({ book }: { book: Book }) {
         </>
       )}
     </span>
-  );
-}
-
-function LoginScreen({ error }: { error?: string | null }) {
-  return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,oklch(0.4_0.07_75_/_0.4),transparent_34%),radial-gradient(circle_at_bottom_left,oklch(0.5_0.1_60_/_0.24),transparent_32%)]" />
-      <section className="relative w-full max-w-md rounded-2xl border border-border bg-card/80 p-6 shadow-2xl backdrop-blur">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="flex size-10 items-cflexenter justify-center overflow-hidden rounded-full border border-primary/40 bg-primary/10 p-1">
-            <BrandLogo className="h-full w-full" />
-          </span>
-          <div>
-            <BrandLogo className="h-16 w-auto max-w-[150px]" />
-            <p className="text-sm text-muted-foreground">
-              Đăng nhập để lưu kệ sách, tiến độ đọc và playlist.
-            </p>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        <a
-          href={getGoogleLoginUrl()}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-        >
-          Đăng nhập bằng Google
-        </a>
-      </section>
-    </main>
   );
 }
 
@@ -392,7 +357,7 @@ function AppSidebar({
               Đăng nhập để giữ kệ sách và playlist của bạn
             </p>
             <a
-              href={getGoogleLoginUrl()}
+              href="/login"
               className="flex h-10 items-center justify-center rounded-xl border border-[#3a2d1a] bg-[#241b10] text-sm font-semibold text-[#d9b98a] transition hover:bg-[#2b2115]"
             >
               Đăng nhập
@@ -580,7 +545,7 @@ function TopHeader({
             </>
           ) : (
             <a
-              href={getGoogleLoginUrl()}
+              href="/login"
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#d9b98a] px-5 text-sm font-bold text-[#241b10] transition hover:brightness-110"
             >
               <LogIn className="size-4" />
@@ -847,6 +812,7 @@ function CategoryTopics({
 
 export default function Page() {
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTabState] = useState<AppTab>(() =>
@@ -1009,6 +975,11 @@ export default function Page() {
       cancelled = true;
     };
   }, []);
+
+  // Chưa đăng nhập thì chuyển sang /login
+  useEffect(() => {
+    if (!authLoading && !user) router.replace("/login");
+  }, [authLoading, user, router]);
 
   useEffect(() => {
     if (!user) return;
@@ -1194,6 +1165,7 @@ export default function Page() {
   }
 
   if (authLoading) return <LoadingScreen />;
+  if (!user) return <LoadingScreen />;
 
   const libraryTitle =
     activeTab === "favorites"
@@ -1256,26 +1228,7 @@ export default function Page() {
             </div>
           )}
 
-          {!user ? (
-            <section className="flex min-h-[calc(100vh-280px)] items-center justify-center">
-              <div className="w-full max-w-md rounded-2xl border border-[#332716] bg-[#1d160d]/90 p-6 text-center shadow-2xl backdrop-blur">
-                <h1 className="flex items-center justify-center gap-3 font-heading text-3xl text-[#f0e6d2]">
-                  <span>Đăng nhập</span>
-                  <BrandLogo className="h-16 w-auto max-w-[130px]" />
-                </h1>
-                <p className="mt-2 text-sm text-[#b3a285]">
-                  Đăng nhập Google để lưu kệ sách, tiến độ đọc và playlist cá
-                  nhân.
-                </p>
-                <a
-                  href={getGoogleLoginUrl()}
-                  className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-[#d9b98a] px-7 text-sm font-bold text-[#241b10] transition hover:brightness-110"
-                >
-                  Đăng nhập
-                </a>
-              </div>
-            </section>
-          ) : activeTab === "discover" ? (
+          {activeTab === "discover" ? (
             <div className="space-y-9">
               {continueBook && (
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
