@@ -1,7 +1,9 @@
 "use client";
 
 import { PRESET_SCENES } from "@/lib/lumi-data";
+import { pressMotion, slideInRight } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   CircleDot,
   CloudRain,
@@ -73,33 +75,43 @@ export function SpacePanel({
 
   return (
     <div className="relative z-[90] flex justify-end">
-      {activePanel && (
-        <div className="absolute right-[76px] top-1/2 z-[95] w-72 -translate-y-1/2 rounded-lg border border-[#f1c36f]/20 bg-[#17100d]/95 p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.58)] backdrop-blur-xl">
-          {(activePanel === "settings" || activePanel === "scenes") && (
-            <div className="grid grid-cols-3 gap-2">
-              {PRESET_SCENES.map((scene) => {
-                const active = background === scene.css;
-                return (
-                  <button
-                    key={scene.id}
-                    onClick={() => setBackground(scene.css)}
-                    className={cn(
-                      "h-14 overflow-hidden rounded-md border transition",
-                      active
-                        ? "border-[#e8c98d] ring-2 ring-[#e8c98d]/40"
-                        : "border-white/10 hover:border-white/35",
-                    )}
-                    style={{ background: scene.css }}
-                    title={scene.name}
-                    aria-label={`Cảnh ${scene.name}`}
-                    aria-pressed={active}
-                  />
-                );
-              })}
-            </div>
-          )}
+      <AnimatePresence mode="wait">
+        {activePanel && (
+          <motion.div
+            key={activePanel}
+            variants={slideInRight}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className="absolute right-[76px] top-1/2 z-[95] w-72 -translate-y-1/2 rounded-lg border border-[#f1c36f]/20 bg-[#17100d]/95 p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.58)] backdrop-blur-xl"
+          >
+            {(activePanel === "settings" || activePanel === "scenes") && (
+              <div className="grid grid-cols-3 gap-2">
+                {PRESET_SCENES.map((scene) => {
+                  const active = background === scene.css;
+                  return (
+                    <motion.button
+                      key={scene.id}
+                      {...pressMotion}
+                      whileHover={{ y: -2, scale: 1.03 }}
+                      onClick={() => setBackground(scene.css)}
+                      className={cn(
+                        "h-14 overflow-hidden rounded-md border transition",
+                        active
+                          ? "border-[#e8c98d] ring-2 ring-[#e8c98d]/40"
+                          : "border-white/10 hover:border-white/35",
+                      )}
+                      style={{ background: scene.css }}
+                      title={scene.name}
+                      aria-label={`Cảnh ${scene.name}`}
+                      aria-pressed={active}
+                    />
+                  );
+                })}
+              </div>
+            )}
 
-          {(activePanel === "settings" || activePanel === "media") && (
+            {(activePanel === "settings" || activePanel === "media") && (
             <div className="mt-3 space-y-2">
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3">
                 <Link2 className="size-4 shrink-0 text-white/45" />
@@ -132,11 +144,12 @@ export function SpacePanel({
                 />
               </label>
             </div>
-          )}
+            )}
 
-          {activePanel === "settings" && (
+            {activePanel === "settings" && (
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
+              <motion.button
+                {...pressMotion}
                 onClick={() => setDark(!dark)}
                 className={cn(
                   "flex items-center justify-center gap-2 rounded-full border py-2 text-xs transition",
@@ -151,8 +164,9 @@ export function SpacePanel({
                 ) : (
                   <Sun className="size-4" />
                 )}
-              </button>
-              <button
+              </motion.button>
+              <motion.button
+                {...pressMotion}
                 onClick={() => setRain(!rain)}
                 className={cn(
                   "flex items-center justify-center gap-2 rounded-full border py-2 text-xs transition",
@@ -164,14 +178,22 @@ export function SpacePanel({
                 aria-pressed={rain}
               >
                 <CloudRain className="size-4" />
-              </button>
+              </motion.button>
             </div>
-          )}
-        </div>
-      )}
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="flex w-[64px] flex-col items-center rounded-[32px] border border-[#f1c36f]/15 bg-[#17100d]/95 px-2 py-5 shadow-[0_22px_62px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.06] backdrop-blur-xl">
-        <button
+      <motion.div
+        initial={{ opacity: 0, x: 14, scale: 0.96 }}
+        animate={{ opacity: 1, x: 0, scale: 1 }}
+        transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+        className="flex w-[64px] flex-col items-center rounded-[32px] border border-[#f1c36f]/15 bg-[#17100d]/95 px-2 py-5 shadow-[0_22px_62px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.06] backdrop-blur-xl"
+      >
+        <motion.button
+          {...pressMotion}
+          whileHover={{ scale: 1.06 }}
           onClick={() => togglePanel("settings")}
           className={cn(
             "flex size-11 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-[#f1c36f]",
@@ -182,11 +204,13 @@ export function SpacePanel({
           title="Không gian"
         >
           <SlidersHorizontal className="size-6" />
-        </button>
+        </motion.button>
 
         <span className="my-3 h-px w-9 bg-white/[0.16]" />
 
-        <button
+        <motion.button
+          {...pressMotion}
+          whileHover={{ scale: 1.06 }}
           onClick={() => togglePanel("scenes")}
           className={cn(
             "flex size-11 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-[#f1c36f]",
@@ -197,11 +221,13 @@ export function SpacePanel({
           title="Cảnh nền"
         >
           <Map className="size-7" />
-        </button>
+        </motion.button>
 
         <span className="my-3 h-px w-9 bg-white/[0.16]" />
 
-        <button
+        <motion.button
+          {...pressMotion}
+          whileHover={{ scale: 1.06 }}
           onClick={() => togglePanel("media")}
           className={cn(
             "flex size-11 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-[#f1c36f]",
@@ -212,11 +238,13 @@ export function SpacePanel({
           title="Ảnh nền"
         >
           <Film className="size-7" />
-        </button>
+        </motion.button>
 
         <span className="my-3 h-px w-9 bg-white/[0.16]" />
 
-        <button
+        <motion.button
+          {...pressMotion}
+          whileHover={{ scale: 1.06 }}
           onClick={() => setDark(!dark)}
           className={cn(
             "flex size-11 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-[#f1c36f]",
@@ -227,8 +255,8 @@ export function SpacePanel({
           title="Sáng tối"
         >
           {dark ? <CircleDot className="size-7" /> : <Sun className="size-7" />}
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
     </div>
   );
 }

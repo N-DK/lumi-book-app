@@ -26,7 +26,16 @@ import {
   type TrackPayload,
 } from "@/lib/api-client";
 import { PRESET_SCENES, type Book } from "@/lib/lumi-data";
+import {
+  cardIn,
+  fadeIn,
+  panelIn,
+  pressMotion,
+  riseIn,
+  staggerContainer,
+} from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   ChevronLeft,
@@ -182,7 +191,12 @@ function SearchBookCover({ book }: { book: Book }) {
 function LoadingScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#141009]">
-      <div className="flex items-center gap-3 rounded-2xl border border-[#332716] bg-[#1d160d]/90 px-5 py-4 text-[#d9b98a] shadow-2xl">
+      <motion.div
+        variants={panelIn}
+        initial="hidden"
+        animate="show"
+        className="flex items-center gap-3 rounded-2xl border border-[#332716] bg-[#1d160d]/90 px-5 py-4 text-[#d9b98a] shadow-2xl"
+      >
         <span className="flex size-10 items-center justify-center rounded-xl border border-[#3a2d1a] bg-[#241b10] p-1.5">
           <Loader2 className="size-5 animate-spin" />
         </span>
@@ -190,7 +204,7 @@ function LoadingScreen() {
           <BrandLogo className="h-16 w-auto max-w-[112px]" />
           <p className="mt-1 text-xs text-[#8a744f]">Đang mở thư viện...</p>
         </div>
-      </div>
+      </motion.div>
     </main>
   );
 }
@@ -1216,15 +1230,36 @@ export default function Page() {
           paddingBottom: PLAYER_HEIGHT + 48,
         }}
       >
-        <div className="w-full max-w-[1480px]">
-          {error && (
-            <div className="mb-5 rounded-md border border-red-300/20 bg-red-950/35 px-4 py-3 text-sm text-red-100">
-              {error}
-            </div>
-          )}
+        <motion.div
+          variants={riseIn}
+          initial="hidden"
+          animate="show"
+          className="w-full max-w-[1480px]"
+        >
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                variants={riseIn}
+                initial="hidden"
+                animate="show"
+                exit="exit"
+                className="mb-5 rounded-md border border-red-300/20 bg-red-950/35 px-4 py-3 text-sm text-red-100"
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {activeTab === "discover" ? (
-            <div className="space-y-9">
+          <AnimatePresence mode="wait">
+            {activeTab === "discover" ? (
+              <motion.div
+                key="discover"
+                variants={fadeIn}
+                initial="hidden"
+                animate="show"
+                exit="exit"
+                className="space-y-9"
+              >
               {continueBook && (
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
                   <ContinueReadingHero
@@ -1303,9 +1338,16 @@ export default function Page() {
                   </>
                 )}
               </div>
-            </div>
-          ) : (
-            <div className="space-y-8">
+              </motion.div>
+            ) : (
+              <motion.div
+                key={activeTab}
+                variants={fadeIn}
+                initial="hidden"
+                animate="show"
+                exit="exit"
+                className="space-y-8"
+              >
               <section className="space-y-6">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
@@ -1333,9 +1375,10 @@ export default function Page() {
                   />
                 )}
               </section>
-            </div>
-          )}
-        </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       </main>
 
       <aside className="fixed right-6 top-1/2 z-[95] -translate-y-1/2">
@@ -1370,16 +1413,19 @@ export default function Page() {
         </div>
       )}
 
-      {openBook && (
-        <Reader
-          book={openBook}
-          onClose={() => setOpenBook(null)}
-          onProgressChange={handleProgressChange}
-          isBookmarked={savedBookIds.has(openBook.id)}
-          isBookmarking={bookmarkingBookIds.has(openBook.id)}
-          onToggleBookmark={handleToggleBookmark}
-        />
-      )}
+      <AnimatePresence>
+        {openBook && (
+          <Reader
+            key={openBook.id}
+            book={openBook}
+            onClose={() => setOpenBook(null)}
+            onProgressChange={handleProgressChange}
+            isBookmarked={savedBookIds.has(openBook.id)}
+            isBookmarking={bookmarkingBookIds.has(openBook.id)}
+            onToggleBookmark={handleToggleBookmark}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

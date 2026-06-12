@@ -1,7 +1,9 @@
 "use client"
 
 import type { Book } from "@/lib/lumi-data"
+import { cardIn, fadeIn, pressMotion, staggerContainer } from "@/lib/motion"
 import { cn } from "@/lib/utils"
+import { motion } from "framer-motion"
 import { Loader2 } from "lucide-react"
 
 interface BookshelfProps {
@@ -78,22 +80,39 @@ export function Bookshelf({
 }: BookshelfProps) {
   if (books.length === 0) {
     return (
-      <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-[#332716] bg-[#1d160d]/50 px-6 text-center text-sm text-[#8a744f]">
+      <motion.div
+        variants={fadeIn}
+        initial="hidden"
+        animate="show"
+        exit="exit"
+        className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-[#332716] bg-[#1d160d]/50 px-6 text-center text-sm text-[#8a744f]"
+      >
         {emptyLabel}
-      </div>
+      </motion.div>
     )
   }
 
   return (
-    <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <motion.div
+      variants={staggerContainer}
+      initial="hidden"
+      animate="show"
+      className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+    >
       {books.map((book) => {
         const saved = savedBookIds?.has(book.id) ?? Boolean(book.saved)
         const bookmarking = bookmarkingBookIds?.has(book.id) ?? false
         const progressPercent = getProgressPercent(book)
 
         return (
-          <article key={book.id} className="group relative">
-            <button
+          <motion.article
+            key={book.id}
+            variants={cardIn}
+            layout
+            className="group relative"
+          >
+            <motion.button
+              {...pressMotion}
               onClick={() => onOpen(book)}
               className="block w-full text-left"
               aria-label={`Đọc ${book.title}`}
@@ -145,7 +164,7 @@ export function Bookshelf({
                   </span>
                 )}
               </div>
-            </button>
+            </motion.button>
 
             {onToggleBookmark && (
               <BookmarkToggle
@@ -158,9 +177,11 @@ export function Bookshelf({
             {showProgress && (
               <div className="mt-2 space-y-1">
                 <div className="h-1 overflow-hidden rounded-full bg-[#332716]">
-                  <div
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressPercent}%` }}
+                    transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                     className="h-full rounded-full bg-gradient-to-r from-[#a8895c] to-[#d9b98a] transition-all duration-500"
-                    style={{ width: `${progressPercent}%` }}
                   />
                 </div>
                 <p className="truncate text-[10px] text-[#8a744f]">
@@ -168,9 +189,9 @@ export function Bookshelf({
                 </p>
               </div>
             )}
-          </article>
+          </motion.article>
         )
       })}
-    </div>
+    </motion.div>
   )
 }

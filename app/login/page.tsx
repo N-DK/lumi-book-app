@@ -2,6 +2,8 @@
 
 import { BookCover } from "@/components/lumi/BookCover";
 import { getCurrentUser, getGoogleLoginUrl } from "@/lib/api-client";
+import { cardIn, pressMotion, riseIn, staggerContainer } from "@/lib/motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Eye,
@@ -77,34 +79,59 @@ function LoginContent() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-ink text-paper/90 font-body flex">
+    <main className="min-h-screen bg-ink text-paper/90 font-body flex">
       {/* Left: decorative panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center bg-shelf">
+      <motion.div
+        initial={{ opacity: 0, x: -28 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center bg-shelf"
+      >
         <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-ink/30" />
         <div className="absolute -top-24 -left-24 w-72 h-72 bg-gold/8 rounded-full blur-3xl" />
         <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-gold/5 rounded-full blur-3xl" />
 
-        <div className="relative z-10 text-center px-12 max-w-md">
-          <div className="w-36 aspect-[2/3] rounded-lg overflow-hidden shadow-[0_24px_64px_-16px_rgba(0,0,0,0.5)] ring-1 ring-paper/10 mx-auto mb-10">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+          className="relative z-10 text-center px-12 max-w-md"
+        >
+          <motion.div
+            variants={cardIn}
+            whileHover={{ y: -6, rotate: -1.5 }}
+            className="w-36 aspect-[2/3] rounded-lg overflow-hidden shadow-[0_24px_64px_-16px_rgba(0,0,0,0.5)] ring-1 ring-paper/10 mx-auto mb-10"
+          >
             <BookCover
               title="Thế Giới Của Ma Đói"
               author="Gabor Maté"
               palette="charcoal"
               style="stamp"
             />
-          </div>
-          <blockquote className="font-display text-2xl font-medium leading-relaxed text-paper/90 text-balance">
+          </motion.div>
+          <motion.blockquote
+            variants={riseIn}
+            className="font-display text-2xl font-medium leading-relaxed text-paper/90 text-balance"
+          >
             “Đọc sách là cách duy nhất để sống nhiều cuộc đời trong một đời
             người.”
-          </blockquote>
-          <p className="mt-6 text-sm text-gold/80 font-medium">
+          </motion.blockquote>
+          <motion.p
+            variants={riseIn}
+            className="mt-6 text-sm text-gold/80 font-medium"
+          >
             — Gabor Maté · Thế Giới Của Ma Đói
-          </p>
-        </div>
-      </div>
+          </motion.p>
+        </motion.div>
+      </motion.div>
 
       {/* Right: login form */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 sm:px-10 py-16 relative">
+      <motion.div
+        initial={{ opacity: 0, x: 28 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="flex-1 flex flex-col items-center justify-center px-6 sm:px-10 py-16 relative"
+      >
         {/* Back link */}
         {/* <a
           href="/"
@@ -114,32 +141,54 @@ function LoginContent() {
           Quay lại thư viện
         </a> */}
 
-        <div className="w-full max-w-sm">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+          className="w-full max-w-sm"
+        >
           {/* Logo */}
-          <div className="flex flex-col items-center gap-2 mb-10">
-            <div className="rounded-2xl bg-paper px-5 py-3 shadow-[0_0_24px_-4px_rgba(201,168,118,0.4)]">
+          <motion.div
+            variants={riseIn}
+            className="flex flex-col items-center gap-2 mb-10"
+          >
+            <motion.div
+              whileHover={{ y: -2, scale: 1.02 }}
+              className="rounded-2xl bg-paper px-5 py-3 shadow-[0_0_24px_-4px_rgba(201,168,118,0.4)]"
+            >
               <BrandLogo className="h-14 w-auto" />
-            </div>
+            </motion.div>
             <p className="text-[10px] uppercase tracking-[0.18em] text-paper/40 mt-1">
               Không gian đọc
             </p>
-          </div>
+          </motion.div>
 
-          <h1 className="font-display font-semibold text-2xl text-center mb-2">
+          <motion.h1
+            variants={riseIn}
+            className="font-display font-semibold text-2xl text-center mb-2"
+          >
             Chào mừng trở lại
-          </h1>
-          <p className="text-sm text-paper/50 text-center mb-8">
+          </motion.h1>
+          <motion.p
+            variants={riseIn}
+            className="text-sm text-paper/50 text-center mb-8"
+          >
             Đăng nhập để tiếp tục hành trình đọc sách của bạn
-          </p>
+          </motion.p>
 
           {hasGoogleError && (
-            <div className="mb-6 rounded-xl border border-red-400/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">
+            <motion.div
+              variants={riseIn}
+              className="mb-6 rounded-xl border border-red-400/30 bg-red-950/30 px-4 py-3 text-sm text-red-200"
+            >
               Đăng nhập chưa hoàn tất. Bạn thử lại sau ít phút nhé.
-            </div>
+            </motion.div>
           )}
 
           {/* Google button */}
-          <a
+          <motion.a
+            {...pressMotion}
+            variants={riseIn}
             href={getGoogleLoginUrl()}
             className="w-full flex items-center justify-center gap-3 h-11 rounded-xl border border-paper/10 bg-paper/[0.03] hover:bg-paper/5 text-sm font-medium transition mb-6"
           >
@@ -162,11 +211,15 @@ function LoginContent() {
               />
             </svg>
             Tiếp tục với Google
-          </a>
+          </motion.a>
 
-          <div className="mt-10 space-y-5">
+          <motion.div variants={staggerContainer} className="mt-10 space-y-5">
             {benefits.map((b) => (
-              <div key={b.title} className="flex items-start gap-4">
+              <motion.div
+                key={b.title}
+                variants={riseIn}
+                className="flex items-start gap-4"
+              >
                 <div className="mt-0.5 size-8 rounded-lg bg-paper/[0.04] border border-paper/10 grid place-items-center shrink-0">
                   <b.icon className="size-4 text-gold/80" />
                 </div>
@@ -174,9 +227,9 @@ function LoginContent() {
                   <p className="text-sm font-medium text-paper/80">{b.title}</p>
                   <p className="text-xs text-paper/40 mt-0.5">{b.desc}</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
 
           {/* Divider */}
           {/* <div className="flex items-center gap-4 mb-6">
@@ -290,7 +343,7 @@ function LoginContent() {
               Đăng ký miễn phí
             </a>
           </p> */}
-        </div>
+        </motion.div>
         <div className="absolute bottom-6 sm:bottom-8 text-[11px] text-paper/30 flex items-center gap-3">
           <a href="#" className="hover:text-paper/60 transition-colors">
             Điều khoản
@@ -304,8 +357,8 @@ function LoginContent() {
             Trợ giúp
           </a>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </main>
   );
 }
 

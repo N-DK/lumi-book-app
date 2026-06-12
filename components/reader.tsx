@@ -2,7 +2,9 @@
 
 import { ProgressSlider } from "@/components/progress-slider";
 import type { Book } from "@/lib/lumi-data";
+import { fadeIn, panelIn } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   BookOpen,
@@ -169,7 +171,11 @@ export function Reader({
   };
 
   return (
-    <div
+    <motion.div
+      variants={fadeIn}
+      initial="hidden"
+      animate="show"
+      exit="exit"
       className="fixed inset-0 z-200 flex flex-col transition-colors duration-300"
       style={{ backgroundColor: t.bg, color: t.text }}
     >
@@ -272,20 +278,28 @@ export function Reader({
 
         {/* progress strip */}
         <div className="h-px" style={{ backgroundColor: t.rule }}>
-          <div
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${percent}%` }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="h-full transition-all"
-            style={{ width: `${percent}%`, backgroundColor: t.accent }}
+            style={{ backgroundColor: t.accent }}
           />
         </div>
       </header>
 
       {/* Settings strip */}
-      {showSettings && (
-        <div
-          className="shrink-0 border-b backdrop-blur"
-          style={{ borderColor: t.rule }}
-        >
-          <div className="flex flex-wrap items-center gap-6 px-5 py-4 sm:px-8">
+      <AnimatePresence initial={false}>
+        {showSettings && (
+          <motion.div
+            variants={panelIn}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className="shrink-0 border-b backdrop-blur"
+            style={{ borderColor: t.rule }}
+          >
+            <div className="flex flex-wrap items-center gap-6 px-5 py-4 sm:px-8">
             <div className="flex items-center gap-3">
               <span
                 className="text-[10px] uppercase tracking-[0.2em]"
@@ -388,17 +402,24 @@ export function Reader({
                 })}
               </div>
             </div>
-          </div>
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Body */}
-      <div className="min-h-0 flex-1">
+      <motion.div
+        key={`${book.id}-${mode}-${themeKey}`}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+        className="min-h-0 flex-1"
+      >
         {book.kind === "sample" && <SampleReader {...bodyProps} />}
         {book.kind === "pdf" && <PdfReader {...bodyProps} />}
         {book.kind === "epub" && <EpubReader {...bodyProps} />}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

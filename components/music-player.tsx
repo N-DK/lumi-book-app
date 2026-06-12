@@ -8,7 +8,9 @@ import type {
   YoutubeSearchResult,
   YoutubeTrackInfo,
 } from "@/lib/api-client";
+import { panelIn, pressMotion, slideInLeft, slideInRight } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Eye,
   EyeOff,
@@ -570,7 +572,12 @@ export function MusicPlayer({
         onEnded={handleEnded}
       />
 
-      <div className="flex items-center gap-6">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+        className="flex items-center gap-6"
+      >
         <div className="flex w-64 min-w-0 shrink-0 items-center gap-3">
           <div
             className={cn(
@@ -612,15 +619,17 @@ export function MusicPlayer({
 
         <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
           <div className="flex items-center gap-2">
-            <button
+            <motion.button
+              {...pressMotion}
               onClick={prev}
               disabled={!canUseTransport}
               className="rounded-full p-2 text-[#a3937a] transition hover:bg-white/[0.06] hover:text-[#ecdfc5]"
               aria-label="Bài trước"
             >
               <SkipBack className="size-4" />
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              {...pressMotion}
               onClick={() => setPlaying((value) => !value)}
               disabled={!canUseTransport}
               className="flex size-11 items-center justify-center rounded-full bg-[#d9b98a] text-[#241b10] shadow-[0_8px_24px_rgba(217,185,138,0.25)] transition hover:brightness-110 disabled:opacity-40"
@@ -631,16 +640,18 @@ export function MusicPlayer({
               ) : (
                 <Play className="ml-0.5 size-5" />
               )}
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              {...pressMotion}
               onClick={next}
               disabled={!canUseTransport}
               className="rounded-full p-2 text-[#a3937a] transition hover:bg-white/[0.06] hover:text-[#ecdfc5]"
               aria-label="Bài kế"
             >
               <SkipForward className="size-4" />
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              {...pressMotion}
               onClick={() => setLoop((value) => !value)}
               className={cn(
                 "rounded-full p-2 transition hover:bg-white/[0.06]",
@@ -650,7 +661,7 @@ export function MusicPlayer({
               aria-pressed={loop}
             >
               <Repeat className="size-4" />
-            </button>
+            </motion.button>
           </div>
 
           <div className="flex w-full max-w-xl items-center gap-3">
@@ -715,7 +726,8 @@ export function MusicPlayer({
               )}
             </button>
           )}
-          <button
+          <motion.button
+            {...pressMotion}
             onClick={() => {
               setShowList((value) => !value);
               setShowAdd(false);
@@ -730,9 +742,10 @@ export function MusicPlayer({
             aria-pressed={showList}
           >
             <ListMusic className="size-4" />
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            {...pressMotion}
             onClick={() => {
               setShowAdd((value) => !value);
               setShowList(false);
@@ -750,391 +763,414 @@ export function MusicPlayer({
               <Plus className="size-3.5" />
             )}
             Thêm nhạc
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
-      {activeYoutubeEmbedUrl && playing && (
-        <div
-          className={cn(
-            "absolute bottom-full left-6 z-20 mb-3 w-[min(520px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/[0.10] bg-[#1d160d]/95 shadow-2xl backdrop-blur-xl transition duration-200",
-            showYoutubeFrame
-              ? "translate-y-0 opacity-100"
-              : "pointer-events-none translate-y-2 opacity-0",
-          )}
-        >
-          <iframe
-            key={activeYoutubeEmbedUrl}
-            src={activeYoutubeEmbedUrl}
-            title={activeTrack?.title ?? "YouTube"}
-            className="aspect-video w-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-        </div>
-      )}
-
-      {showAdd && (
-        <form
-          onSubmit={(event) => void handleResolveYoutube(event)}
-          className="absolute bottom-full right-6 mb-3 w-[min(680px,calc(100vw-2rem))] rounded-2xl border border-white/[0.10] bg-[#1d160d]/95 p-4 text-white shadow-2xl backdrop-blur-xl"
-        >
-          <div className="flex items-center gap-2 rounded-xl border border-[#3a2d1a] bg-black/[0.28] px-3">
-            <LinkIcon className="size-4 shrink-0 text-[#d9b98a]" />
-            <input
-              value={youtubeUrl}
-              onChange={(e) => {
-                setYoutubeUrl(e.target.value);
-                setYoutubeResults([]);
-                setYoutubeSearchQuery("");
-                setYoutubeHasMore(false);
-                setAddError("");
-              }}
-              className="h-11 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
-              placeholder="Tìm hoặc dán URL YouTube..."
+      <AnimatePresence>
+        {activeYoutubeEmbedUrl && playing && (
+          <motion.div
+            variants={slideInLeft}
+            initial="hidden"
+            animate={showYoutubeFrame ? "show" : "hidden"}
+            exit="exit"
+            className={cn(
+              "absolute bottom-full left-6 z-20 mb-3 w-[min(520px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/[0.10] bg-[#1d160d]/95 shadow-2xl backdrop-blur-xl",
+              !showYoutubeFrame && "pointer-events-none",
+            )}
+          >
+            <iframe
+              key={activeYoutubeEmbedUrl}
+              src={activeYoutubeEmbedUrl}
+              title={activeTrack?.title ?? "YouTube"}
+              className="aspect-video w-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
             />
-            <button
-              type="submit"
-              disabled={resolving || !youtubeUrl.trim()}
-              className="flex h-8 shrink-0 items-center gap-2 rounded-lg bg-[#d9b98a] px-3 text-xs font-semibold text-[#241b10] transition hover:brightness-110 disabled:opacity-40"
-            >
-              {resolving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {resolving ? "Đang tìm" : "Tìm"}
-            </button>
-          </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {youtubeResults.length > 0 && (
-            <div
-              onScroll={(event) => {
-                const target = event.currentTarget;
-                const distanceFromBottom =
-                  target.scrollHeight - target.scrollTop - target.clientHeight;
-                if (distanceFromBottom < 80) void loadMoreYoutubeResults();
-              }}
-              className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-xl border border-[#3a2d1a] bg-black/[0.22] p-2 lumi-scroll"
-            >
-              {youtubeResults.map((item) => (
-                <button
-                  key={item.sourceUrl || item.id || item.title}
-                  type="button"
-                  onClick={() => selectYoutubeTrack(item)}
-                  className="group flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-white/[0.08]"
-                >
-                  <span className="relative h-14 w-24 shrink-0 overflow-hidden rounded-md border border-white/[0.10] bg-black/30">
-                    {item.coverUrl ? (
-                      <img
-                        src={item.coverUrl}
-                        alt=""
-                        className="absolute inset-0 h-full w-full object-cover"
-                        draggable={false}
-                      />
-                    ) : null}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="line-clamp-2 text-sm font-semibold text-[#f0e6d2]">
-                      {item.title}
-                    </span>
-                    <span className="mt-1 block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
-                      {item.artist || "YouTube"}
-                    </span>
-                  </span>
-                  <span className="shrink-0 rounded-lg border border-[#d9b98a]/30 px-2 py-1 text-[10px] font-semibold text-[#d9b98a] opacity-75 transition group-hover:opacity-100">
-                    Chọn
-                  </span>
-                </button>
-              ))}
-              {(youtubeHasMore || loadingMoreYoutube) && (
-                <div className="flex h-10 items-center justify-center text-[#d9b98a]/80">
-                  {loadingMoreYoutube ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <span className="h-px w-10 rounded-full bg-[#d9b98a]/30" />
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {addError && (
-            <p className="mt-3 rounded-lg border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-100">
-              {addError}
-            </p>
-          )}
-
-          {youtubePreview && (
-            <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#3a2d1a] bg-[#241b10]/70 p-3">
-              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-white/[0.10] bg-black/30">
-                {youtubePreview.coverUrl ? (
-                  <img
-                    src={youtubePreview.coverUrl}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    draggable={false}
-                  />
-                ) : null}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-heading text-base text-[#f0e6d2]">
-                  {youtubePreview.title}
-                </p>
-                <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
-                  Video YouTube · {youtubePreview.artist}
-                </p>
-              </div>
+      <AnimatePresence>
+        {showAdd && (
+          <motion.form
+            variants={slideInRight}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            onSubmit={(event) => void handleResolveYoutube(event)}
+            className="absolute bottom-full right-6 mb-3 w-[min(680px,calc(100vw-2rem))] rounded-2xl border border-white/[0.10] bg-[#1d160d]/95 p-4 text-white shadow-2xl backdrop-blur-xl"
+          >
+            <div className="flex items-center gap-2 rounded-xl border border-[#3a2d1a] bg-black/[0.28] px-3">
+              <LinkIcon className="size-4 shrink-0 text-[#d9b98a]" />
+              <input
+                value={youtubeUrl}
+                onChange={(e) => {
+                  setYoutubeUrl(e.target.value);
+                  setYoutubeResults([]);
+                  setYoutubeSearchQuery("");
+                  setYoutubeHasMore(false);
+                  setAddError("");
+                }}
+                className="h-11 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                placeholder="Tìm hoặc dán URL YouTube..."
+              />
               <button
-                type="button"
-                onClick={() => void handleSaveYoutube()}
-                disabled={saving || resolving}
-                className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-[#d9b98a]/40 bg-[#d9b98a]/[0.12] px-4 text-xs font-semibold text-[#e9d2a6] transition hover:bg-[#d9b98a]/[0.20] disabled:opacity-45"
+                type="submit"
+                disabled={resolving || !youtubeUrl.trim()}
+                className="flex h-8 shrink-0 items-center gap-2 rounded-lg bg-[#d9b98a] px-3 text-xs font-semibold text-[#241b10] transition hover:brightness-110 disabled:opacity-40"
               >
-                {saving ? (
+                {resolving ? (
                   <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Save className="size-3.5" />
-                )}
-                Lưu link YouTube
+                ) : null}
+                {resolving ? "Đang tìm" : "Tìm"}
               </button>
             </div>
-          )}
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.08] pt-3">
-            <p className="text-[11px] text-white/[0.42]">
-              Chỉ lưu những bài bạn có quyền sử dụng.
-            </p>
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/[0.14] px-3 py-2 text-xs text-white/50 transition hover:border-[#d9b98a] hover:text-white">
-              <Upload className="size-3.5" />
-              Tệp nhạc
-              <input
-                type="file"
-                accept="audio/*"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  void handleFiles(e.target.files);
-                  e.currentTarget.value = "";
+            {youtubeResults.length > 0 && (
+              <div
+                onScroll={(event) => {
+                  const target = event.currentTarget;
+                  const distanceFromBottom =
+                    target.scrollHeight -
+                    target.scrollTop -
+                    target.clientHeight;
+                  if (distanceFromBottom < 80) void loadMoreYoutubeResults();
                 }}
-              />
-            </label>
-          </div>
-        </form>
-      )}
-
-      {showList && (
-        <div className="absolute bottom-full right-6 z-30 mb-3 flex max-h-[min(78vh,720px)] w-[min(368px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-[#3a2d1a] bg-[#1d160d]/[0.98] text-[#ecdfc5] shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-          <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-4">
-            <div className="min-w-0 pr-3">
-              <p className="font-heading text-base font-semibold text-[#f5ead7]">
-                Danh sách phát
-              </p>
-              <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
-                {tracks.length} bài trong {playlist?.name ?? "Nhạc yêu thích"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowList(false)}
-              className="grid size-9 place-items-center rounded-full text-[#a3937a] transition hover:bg-white/[0.06] hover:text-[#ecdfc5]"
-              aria-label="Đóng danh sách phát"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-
-          {tracks.length === 0 && !queueCurrentTrack ? (
-            <div className="grid min-h-52 place-items-center px-6 py-10 text-center">
-              <div>
-                <div className="mx-auto grid size-12 place-items-center rounded-full border border-[#3a2d1a] bg-black/20 text-[#d9b98a]">
-                  <ListMusic className="size-5" />
-                </div>
-                <p className="mt-4 text-sm font-semibold text-[#f0e6d2]">
-                  Danh sách trống
-                </p>
-                <p className="mt-1 text-xs text-[#a3937a]">
-                  Thêm nhạc để bắt đầu nghe.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 lumi-scroll">
-              {queueCurrentTrack && (
-                <section>
-                  <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#d9b98a]">
-                    Đang phát
-                  </p>
-                  <div className="group flex items-center gap-3 rounded-xl bg-[#2b2115] p-2 shadow-[inset_0_1px_0_rgba(236,223,197,0.05)]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isPreviewing) setPlaying(true);
-                        else playIndex(current);
-                      }}
-                      className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/30"
-                      aria-label={`Phát ${queueCurrentTrack.title}`}
-                    >
-                      {queueCurrentTrack.coverUrl ? (
+                className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-xl border border-[#3a2d1a] bg-black/[0.22] p-2 lumi-scroll"
+              >
+                {youtubeResults.map((item) => (
+                  <button
+                    key={item.sourceUrl || item.id || item.title}
+                    type="button"
+                    onClick={() => selectYoutubeTrack(item)}
+                    className="group flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-white/[0.08]"
+                  >
+                    <span className="relative h-14 w-24 shrink-0 overflow-hidden rounded-md border border-white/[0.10] bg-black/30">
+                      {item.coverUrl ? (
                         <img
-                          src={queueCurrentTrack.coverUrl}
+                          src={item.coverUrl}
                           alt=""
                           className="absolute inset-0 h-full w-full object-cover"
                           draggable={false}
                         />
-                      ) : (
-                        <span className="absolute inset-0 grid place-items-center text-[#d9b98a]">
-                          <ListMusic className="size-5" />
-                        </span>
-                      )}
-                      <span className="absolute inset-0 grid place-items-center bg-black/25 text-white">
-                        {playing ? (
-                          <span className="flex h-4 items-end justify-center gap-[3px]">
-                            <span
-                              className="w-[3px] rounded-full bg-[#d9b98a]"
-                              style={{
-                                animation: "lumi-eq 0.8s ease-in-out infinite",
-                              }}
-                            />
-                            <span
-                              className="w-[3px] rounded-full bg-[#d9b98a]"
-                              style={{
-                                animation:
-                                  "lumi-eq 0.8s ease-in-out 0.2s infinite",
-                              }}
-                            />
-                            <span
-                              className="w-[3px] rounded-full bg-[#d9b98a]"
-                              style={{
-                                animation:
-                                  "lumi-eq 0.8s ease-in-out 0.4s infinite",
-                              }}
-                            />
-                          </span>
-                        ) : (
-                          <Play className="ml-0.5 size-5 fill-current" />
-                        )}
+                      ) : null}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 text-sm font-semibold text-[#f0e6d2]">
+                        {item.title}
                       </span>
-                    </button>
+                      <span className="mt-1 block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
+                        {item.artist || "YouTube"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-lg border border-[#d9b98a]/30 px-2 py-1 text-[10px] font-semibold text-[#d9b98a] opacity-75 transition group-hover:opacity-100">
+                      Chọn
+                    </span>
+                  </button>
+                ))}
+                {(youtubeHasMore || loadingMoreYoutube) && (
+                  <div className="flex h-10 items-center justify-center text-[#d9b98a]/80">
+                    {loadingMoreYoutube ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <span className="h-px w-10 rounded-full bg-[#d9b98a]/30" />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-[#f5ead7]">
-                        {queueCurrentTrack.title}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-[#b8a688]">
-                        {queueCurrentTrack.artist}
-                      </p>
-                      <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a8895c]">
-                        {isPreviewing
-                          ? "Đang nghe thử"
-                          : getTrackSourceLabel(queueCurrentTrack)}
-                      </p>
-                    </div>
+            {addError && (
+              <p className="mt-3 rounded-lg border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-100">
+                {addError}
+              </p>
+            )}
 
-                    {!isPreviewing && track && (
+            {youtubePreview && (
+              <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#3a2d1a] bg-[#241b10]/70 p-3">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-white/[0.10] bg-black/30">
+                  {youtubePreview.coverUrl ? (
+                    <img
+                      src={youtubePreview.coverUrl}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      draggable={false}
+                    />
+                  ) : null}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-heading text-base text-[#f0e6d2]">
+                    {youtubePreview.title}
+                  </p>
+                  <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
+                    Video YouTube · {youtubePreview.artist}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveYoutube()}
+                  disabled={saving || resolving}
+                  className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-[#d9b98a]/40 bg-[#d9b98a]/[0.12] px-4 text-xs font-semibold text-[#e9d2a6] transition hover:bg-[#d9b98a]/[0.20] disabled:opacity-45"
+                >
+                  {saving ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Save className="size-3.5" />
+                  )}
+                  Lưu link YouTube
+                </button>
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.08] pt-3">
+              <p className="text-[11px] text-white/[0.42]">
+                Chỉ lưu những bài bạn có quyền sử dụng.
+              </p>
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/[0.14] px-3 py-2 text-xs text-white/50 transition hover:border-[#d9b98a] hover:text-white">
+                <Upload className="size-3.5" />
+                Tệp nhạc
+                <input
+                  type="file"
+                  accept="audio/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    void handleFiles(e.target.files);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showList && (
+          <motion.div
+            variants={panelIn}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className="absolute bottom-full right-6 z-30 mb-3 flex max-h-[min(78vh,720px)] w-[min(368px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-[#3a2d1a] bg-[#1d160d]/[0.98] text-[#ecdfc5] shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+          >
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-4">
+              <div className="min-w-0 pr-3">
+                <p className="font-heading text-base font-semibold text-[#f5ead7]">
+                  Danh sách phát
+                </p>
+                <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
+                  {tracks.length} bài trong {playlist?.name ?? "Nhạc yêu thích"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowList(false)}
+                className="grid size-9 place-items-center rounded-full text-[#a3937a] transition hover:bg-white/[0.06] hover:text-[#ecdfc5]"
+                aria-label="Đóng danh sách phát"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {tracks.length === 0 && !queueCurrentTrack ? (
+              <div className="grid min-h-52 place-items-center px-6 py-10 text-center">
+                <div>
+                  <div className="mx-auto grid size-12 place-items-center rounded-full border border-[#3a2d1a] bg-black/20 text-[#d9b98a]">
+                    <ListMusic className="size-5" />
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-[#f0e6d2]">
+                    Danh sách trống
+                  </p>
+                  <p className="mt-1 text-xs text-[#a3937a]">
+                    Thêm nhạc để bắt đầu nghe.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 lumi-scroll">
+                {queueCurrentTrack && (
+                  <section>
+                    <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#d9b98a]">
+                      Đang phát
+                    </p>
+                    <div className="group flex items-center gap-3 rounded-xl bg-[#2b2115] p-2 shadow-[inset_0_1px_0_rgba(236,223,197,0.05)]">
                       <button
                         type="button"
-                        onClick={() => void removeTrack(track.id)}
-                        className="grid size-9 shrink-0 place-items-center rounded-full text-[#a3937a] opacity-70 transition hover:bg-red-400/10 hover:text-red-200 group-hover:opacity-100"
-                        aria-label={`Xóa ${track.title}`}
-                        disabled={removingTrackId === track.id}
+                        onClick={() => {
+                          if (isPreviewing) setPlaying(true);
+                          else playIndex(current);
+                        }}
+                        className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/30"
+                        aria-label={`Phát ${queueCurrentTrack.title}`}
                       >
-                        {removingTrackId === track.id ? (
-                          <Loader2 className="size-4 animate-spin" />
+                        {queueCurrentTrack.coverUrl ? (
+                          <img
+                            src={queueCurrentTrack.coverUrl}
+                            alt=""
+                            className="absolute inset-0 h-full w-full object-cover"
+                            draggable={false}
+                          />
                         ) : (
-                          <Trash2 className="size-4" />
+                          <span className="absolute inset-0 grid place-items-center text-[#d9b98a]">
+                            <ListMusic className="size-5" />
+                          </span>
                         )}
+                        <span className="absolute inset-0 grid place-items-center bg-black/25 text-white">
+                          {playing ? (
+                            <span className="flex h-4 items-end justify-center gap-[3px]">
+                              <span
+                                className="w-[3px] rounded-full bg-[#d9b98a]"
+                                style={{
+                                  animation:
+                                    "lumi-eq 0.8s ease-in-out infinite",
+                                }}
+                              />
+                              <span
+                                className="w-[3px] rounded-full bg-[#d9b98a]"
+                                style={{
+                                  animation:
+                                    "lumi-eq 0.8s ease-in-out 0.2s infinite",
+                                }}
+                              />
+                              <span
+                                className="w-[3px] rounded-full bg-[#d9b98a]"
+                                style={{
+                                  animation:
+                                    "lumi-eq 0.8s ease-in-out 0.4s infinite",
+                                }}
+                              />
+                            </span>
+                          ) : (
+                            <Play className="ml-0.5 size-5 fill-current" />
+                          )}
+                        </span>
                       </button>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-[#f5ead7]">
+                          {queueCurrentTrack.title}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-[#b8a688]">
+                          {queueCurrentTrack.artist}
+                        </p>
+                        <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a8895c]">
+                          {isPreviewing
+                            ? "Đang nghe thử"
+                            : getTrackSourceLabel(queueCurrentTrack)}
+                        </p>
+                      </div>
+
+                      {!isPreviewing && track && (
+                        <button
+                          type="button"
+                          onClick={() => void removeTrack(track.id)}
+                          className="grid size-9 shrink-0 place-items-center rounded-full text-[#a3937a] opacity-70 transition hover:bg-red-400/10 hover:text-red-200 group-hover:opacity-100"
+                          aria-label={`Xóa ${track.title}`}
+                          disabled={removingTrackId === track.id}
+                        >
+                          {removingTrackId === track.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                <section className="mt-5">
+                  <p className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#f0e6d2]">
+                    Tiếp theo
+                  </p>
+                  <p className="mt-1 truncate px-1 text-xs text-[#a3937a]">
+                    {queueCurrentTrack
+                      ? `Sau ${queueCurrentTrack.title}`
+                      : (playlist?.name ?? "Nhạc yêu thích")}
+                  </p>
+
+                  <div className="mt-3 space-y-1.5">
+                    {upcomingTracks.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-[#3a2d1a] px-3 py-4 text-center text-xs text-[#a3937a]">
+                        Hết danh sách phát.
+                      </p>
+                    ) : (
+                      upcomingTracks.map(({ item, index }) => (
+                        <div
+                          key={item.id}
+                          className="group flex items-center gap-3 rounded-xl p-2 transition hover:bg-white/[0.06]"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => playIndex(index)}
+                            className="relative size-12 shrink-0 overflow-hidden rounded-md border border-white/[0.08] bg-black/25 text-[#d9b98a]"
+                            aria-label={`Phát ${item.title}`}
+                          >
+                            {item.coverUrl ? (
+                              <img
+                                src={item.coverUrl}
+                                alt=""
+                                className="absolute inset-0 h-full w-full object-cover"
+                                draggable={false}
+                              />
+                            ) : (
+                              <span className="absolute inset-0 grid place-items-center">
+                                <ListMusic className="size-4" />
+                              </span>
+                            )}
+                            <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                              <Play className="ml-0.5 size-4 fill-current" />
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => playIndex(index)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <span className="block truncate text-sm font-semibold text-[#f0e6d2]">
+                              {item.title}
+                            </span>
+                            <span className="mt-1 block truncate text-xs text-[#a3937a]">
+                              {item.artist}
+                            </span>
+                            <span className="mt-1 block truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a8895c]">
+                              {getTrackSourceLabel(item)}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => void removeTrack(item.id)}
+                            className="grid size-8 shrink-0 place-items-center rounded-full text-[#7f6f58] opacity-0 transition hover:bg-red-400/10 hover:text-red-200 group-hover:opacity-100"
+                            aria-label={`Xóa ${item.title}`}
+                            disabled={removingTrackId === item.id}
+                          >
+                            {removingTrackId === item.id ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="size-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      ))
                     )}
                   </div>
                 </section>
-              )}
+              </div>
+            )}
 
-              <section className="mt-5">
-                <p className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#f0e6d2]">
-                  Tiếp theo
-                </p>
-                <p className="mt-1 truncate px-1 text-xs text-[#a3937a]">
-                  {queueCurrentTrack
-                    ? `Sau ${queueCurrentTrack.title}`
-                    : (playlist?.name ?? "Nhạc yêu thích")}
-                </p>
-
-                <div className="mt-3 space-y-1.5">
-                  {upcomingTracks.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-[#3a2d1a] px-3 py-4 text-center text-xs text-[#a3937a]">
-                      Hết danh sách phát.
-                    </p>
-                  ) : (
-                    upcomingTracks.map(({ item, index }) => (
-                      <div
-                        key={item.id}
-                        className="group flex items-center gap-3 rounded-xl p-2 transition hover:bg-white/[0.06]"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => playIndex(index)}
-                          className="relative size-12 shrink-0 overflow-hidden rounded-md border border-white/[0.08] bg-black/25 text-[#d9b98a]"
-                          aria-label={`Phát ${item.title}`}
-                        >
-                          {item.coverUrl ? (
-                            <img
-                              src={item.coverUrl}
-                              alt=""
-                              className="absolute inset-0 h-full w-full object-cover"
-                              draggable={false}
-                            />
-                          ) : (
-                            <span className="absolute inset-0 grid place-items-center">
-                              <ListMusic className="size-4" />
-                            </span>
-                          )}
-                          <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
-                            <Play className="ml-0.5 size-4 fill-current" />
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => playIndex(index)}
-                          className="min-w-0 flex-1 text-left"
-                        >
-                          <span className="block truncate text-sm font-semibold text-[#f0e6d2]">
-                            {item.title}
-                          </span>
-                          <span className="mt-1 block truncate text-xs text-[#a3937a]">
-                            {item.artist}
-                          </span>
-                          <span className="mt-1 block truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a8895c]">
-                            {getTrackSourceLabel(item)}
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => void removeTrack(item.id)}
-                          className="grid size-8 shrink-0 place-items-center rounded-full text-[#7f6f58] opacity-0 transition hover:bg-red-400/10 hover:text-red-200 group-hover:opacity-100"
-                          aria-label={`Xóa ${item.title}`}
-                          disabled={removingTrackId === item.id}
-                        >
-                          {removingTrackId === item.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
+            <div className="flex h-12 shrink-0 items-center justify-between border-t border-white/[0.07] px-4 text-[11px] text-[#a3937a]">
+              <span className="rounded-md bg-[#d9b98a]/15 px-2 py-1 font-semibold text-[#e9d2a6]">
+                {activeIsYoutube ? "YouTube" : "MP3"}
+              </span>
+              <ListMusic className="size-4" />
             </div>
-          )}
-
-          <div className="flex h-12 shrink-0 items-center justify-between border-t border-white/[0.07] px-4 text-[11px] text-[#a3937a]">
-            <span className="rounded-md bg-[#d9b98a]/15 px-2 py-1 font-semibold text-[#e9d2a6]">
-              {activeIsYoutube ? "YouTube" : "MP3"}
-            </span>
-            <ListMusic className="size-4" />
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
