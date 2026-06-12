@@ -25,6 +25,7 @@ import {
   Trash2,
   Upload,
   Volume2,
+  X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
@@ -214,6 +215,15 @@ function isYoutubeTrack(
   );
 }
 
+function getTrackSourceLabel(
+  track?: Pick<ApiTrack, "source" | "audioUrl" | "sourceUrl"> | null,
+) {
+  if (!track) return "Nhạc";
+  if (isYoutubeTrack(track)) return "YouTube";
+  if (track.source === "mp3") return "MP3";
+  return "Nhạc cá nhân";
+}
+
 function getYoutubeResultKey(track: YoutubeTrackInfo) {
   return track.sourceUrl || track.audioUrl || track.id || track.title;
 }
@@ -293,6 +303,17 @@ export function MusicPlayer({
     : "";
   const canUseTransport = Boolean(activeTrack);
   const progressDisabled = !canUseTransport || activeIsYoutube || duration <= 0;
+  const queueCurrentTrack = isPreviewing ? activeTrack : track;
+  const upcomingTracks = useMemo(() => {
+    const indexedTracks = tracks.map((item, index) => ({ item, index }));
+    if (isPreviewing) return indexedTracks;
+    if (tracks.length <= 1) return [];
+
+    return [
+      ...indexedTracks.slice(current + 1),
+      ...indexedTracks.slice(0, current),
+    ];
+  }, [current, isPreviewing, tracks]);
 
   useEffect(() => {
     setCurrent((index) => clampIndex(index, tracks.length));
@@ -695,7 +716,10 @@ export function MusicPlayer({
             </button>
           )}
           <button
-            onClick={() => setShowList((value) => !value)}
+            onClick={() => {
+              setShowList((value) => !value);
+              setShowAdd(false);
+            }}
             className={cn(
               "rounded-full p-2 transition hover:bg-white/[0.06]",
               showList
@@ -896,78 +920,222 @@ export function MusicPlayer({
       )}
 
       {showList && (
-        <div className="absolute inset-x-0 bottom-full mb-2 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-white/[0.10] bg-[#1d160d]/95 p-2 text-white shadow-2xl backdrop-blur-xl lumi-scroll">
-          {tracks.length === 0 && (
-            <p className="px-2 py-3 text-center text-xs text-white/45">
-              Danh sách trống.
-            </p>
-          )}
-          {tracks.map((item: ApiTrack, i) => (
-            <div
-              key={item.id}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition hover:bg-white/[0.08]",
-                i === current &&
-                  !isPreviewing &&
-                  "bg-white/[0.08] text-[#d9b98a]",
-              )}
-            >
-              <button
-                onClick={() => playIndex(i)}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left"
-              >
-                <span className="flex w-6 shrink-0 justify-center text-white/45">
-                  {i === current && playing && !isPreviewing ? (
-                    <span className="flex h-3 items-end justify-center gap-[2px]">
-                      <span
-                        className="w-[2px] bg-[#d9b98a]"
-                        style={{
-                          animation: "lumi-eq 0.8s ease-in-out infinite",
-                        }}
-                      />
-                      <span
-                        className="w-[2px] bg-[#d9b98a]"
-                        style={{
-                          animation: "lumi-eq 0.8s ease-in-out 0.2s infinite",
-                        }}
-                      />
-                      <span
-                        className="w-[2px] bg-[#d9b98a]"
-                        style={{
-                          animation: "lumi-eq 0.8s ease-in-out 0.4s infinite",
-                        }}
-                      />
-                    </span>
-                  ) : item.coverUrl ? (
-                    <img
-                      src={item.coverUrl}
-                      alt=""
-                      className="size-5 rounded-sm object-cover"
-                      draggable={false}
-                    />
-                  ) : (
-                    i + 1
-                  )}
-                </span>
-                <span className="truncate">{item.title}</span>
-                <span className="shrink-0 rounded border border-white/[0.10] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-[#a8895c]">
-                  {isYoutubeTrack(item) ? "YT" : "MP3"}
-                </span>
-              </button>
-              <button
-                onClick={() => void removeTrack(item.id)}
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-white/[0.42] transition hover:bg-red-400/10 hover:text-red-200"
-                aria-label={`Xóa ${item.title}`}
-                disabled={removingTrackId === item.id}
-              >
-                {removingTrackId === item.id ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Trash2 className="size-3.5" />
-                )}
-              </button>
+        <div className="absolute bottom-full right-6 z-30 mb-3 flex max-h-[min(78vh,720px)] w-[min(368px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-[#3a2d1a] bg-[#1d160d]/[0.98] text-[#ecdfc5] shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.07] px-4">
+            <div className="min-w-0 pr-3">
+              <p className="font-heading text-base font-semibold text-[#f5ead7]">
+                Danh sách phát
+              </p>
+              <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
+                {tracks.length} bài trong {playlist?.name ?? "Nhạc yêu thích"}
+              </p>
             </div>
-          ))}
+            <button
+              type="button"
+              onClick={() => setShowList(false)}
+              className="grid size-9 place-items-center rounded-full text-[#a3937a] transition hover:bg-white/[0.06] hover:text-[#ecdfc5]"
+              aria-label="Đóng danh sách phát"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          {tracks.length === 0 && !queueCurrentTrack ? (
+            <div className="grid min-h-52 place-items-center px-6 py-10 text-center">
+              <div>
+                <div className="mx-auto grid size-12 place-items-center rounded-full border border-[#3a2d1a] bg-black/20 text-[#d9b98a]">
+                  <ListMusic className="size-5" />
+                </div>
+                <p className="mt-4 text-sm font-semibold text-[#f0e6d2]">
+                  Danh sách trống
+                </p>
+                <p className="mt-1 text-xs text-[#a3937a]">
+                  Thêm nhạc để bắt đầu nghe.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 lumi-scroll">
+              {queueCurrentTrack && (
+                <section>
+                  <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#d9b98a]">
+                    Đang phát
+                  </p>
+                  <div className="group flex items-center gap-3 rounded-xl bg-[#2b2115] p-2 shadow-[inset_0_1px_0_rgba(236,223,197,0.05)]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isPreviewing) setPlaying(true);
+                        else playIndex(current);
+                      }}
+                      className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-black/30"
+                      aria-label={`Phát ${queueCurrentTrack.title}`}
+                    >
+                      {queueCurrentTrack.coverUrl ? (
+                        <img
+                          src={queueCurrentTrack.coverUrl}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                          draggable={false}
+                        />
+                      ) : (
+                        <span className="absolute inset-0 grid place-items-center text-[#d9b98a]">
+                          <ListMusic className="size-5" />
+                        </span>
+                      )}
+                      <span className="absolute inset-0 grid place-items-center bg-black/25 text-white">
+                        {playing ? (
+                          <span className="flex h-4 items-end justify-center gap-[3px]">
+                            <span
+                              className="w-[3px] rounded-full bg-[#d9b98a]"
+                              style={{
+                                animation: "lumi-eq 0.8s ease-in-out infinite",
+                              }}
+                            />
+                            <span
+                              className="w-[3px] rounded-full bg-[#d9b98a]"
+                              style={{
+                                animation:
+                                  "lumi-eq 0.8s ease-in-out 0.2s infinite",
+                              }}
+                            />
+                            <span
+                              className="w-[3px] rounded-full bg-[#d9b98a]"
+                              style={{
+                                animation:
+                                  "lumi-eq 0.8s ease-in-out 0.4s infinite",
+                              }}
+                            />
+                          </span>
+                        ) : (
+                          <Play className="ml-0.5 size-5 fill-current" />
+                        )}
+                      </span>
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-[#f5ead7]">
+                        {queueCurrentTrack.title}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-[#b8a688]">
+                        {queueCurrentTrack.artist}
+                      </p>
+                      <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a8895c]">
+                        {isPreviewing
+                          ? "Đang nghe thử"
+                          : getTrackSourceLabel(queueCurrentTrack)}
+                      </p>
+                    </div>
+
+                    {!isPreviewing && track && (
+                      <button
+                        type="button"
+                        onClick={() => void removeTrack(track.id)}
+                        className="grid size-9 shrink-0 place-items-center rounded-full text-[#a3937a] opacity-70 transition hover:bg-red-400/10 hover:text-red-200 group-hover:opacity-100"
+                        aria-label={`Xóa ${track.title}`}
+                        disabled={removingTrackId === track.id}
+                      >
+                        {removingTrackId === track.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              <section className="mt-5">
+                <p className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-[#f0e6d2]">
+                  Tiếp theo
+                </p>
+                <p className="mt-1 truncate px-1 text-xs text-[#a3937a]">
+                  {queueCurrentTrack
+                    ? `Sau ${queueCurrentTrack.title}`
+                    : (playlist?.name ?? "Nhạc yêu thích")}
+                </p>
+
+                <div className="mt-3 space-y-1.5">
+                  {upcomingTracks.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-[#3a2d1a] px-3 py-4 text-center text-xs text-[#a3937a]">
+                      Hết danh sách phát.
+                    </p>
+                  ) : (
+                    upcomingTracks.map(({ item, index }) => (
+                      <div
+                        key={item.id}
+                        className="group flex items-center gap-3 rounded-xl p-2 transition hover:bg-white/[0.06]"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => playIndex(index)}
+                          className="relative size-12 shrink-0 overflow-hidden rounded-md border border-white/[0.08] bg-black/25 text-[#d9b98a]"
+                          aria-label={`Phát ${item.title}`}
+                        >
+                          {item.coverUrl ? (
+                            <img
+                              src={item.coverUrl}
+                              alt=""
+                              className="absolute inset-0 h-full w-full object-cover"
+                              draggable={false}
+                            />
+                          ) : (
+                            <span className="absolute inset-0 grid place-items-center">
+                              <ListMusic className="size-4" />
+                            </span>
+                          )}
+                          <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                            <Play className="ml-0.5 size-4 fill-current" />
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => playIndex(index)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <span className="block truncate text-sm font-semibold text-[#f0e6d2]">
+                            {item.title}
+                          </span>
+                          <span className="mt-1 block truncate text-xs text-[#a3937a]">
+                            {item.artist}
+                          </span>
+                          <span className="mt-1 block truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a8895c]">
+                            {getTrackSourceLabel(item)}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void removeTrack(item.id)}
+                          className="grid size-8 shrink-0 place-items-center rounded-full text-[#7f6f58] opacity-0 transition hover:bg-red-400/10 hover:text-red-200 group-hover:opacity-100"
+                          aria-label={`Xóa ${item.title}`}
+                          disabled={removingTrackId === item.id}
+                        >
+                          {removingTrackId === item.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
+
+          <div className="flex h-12 shrink-0 items-center justify-between border-t border-white/[0.07] px-4 text-[11px] text-[#a3937a]">
+            <span className="rounded-md bg-[#d9b98a]/15 px-2 py-1 font-semibold text-[#e9d2a6]">
+              {activeIsYoutube ? "YouTube" : "MP3"}
+            </span>
+            <span className="min-w-0 truncate px-3">
+              {playlist?.name ?? "Nhạc yêu thích"}
+            </span>
+            <ListMusic className="size-4" />
+          </div>
         </div>
       )}
     </div>
