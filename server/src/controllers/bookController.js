@@ -38,6 +38,27 @@ function slugify(value) {
     .slice(0, 90);
 }
 
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeTextSearch(value) {
+  return value.replace(/["\\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function buildRegexSearchFilter(searchText) {
+  const regex = new RegExp(escapeRegex(searchText), "i");
+  return {
+    $or: [
+      { title: regex },
+      { author: regex },
+      { description: regex },
+      { category: regex },
+      { categories: regex },
+    ],
+  };
+}
+
 function buildBookPayload(body, seedIndex = 0) {
   const categories = normalizeCategories(body.categories ?? body.category);
   const kind = body.kind || (body.epubUrl || body.epub_url ? "epub" : "pdf");
@@ -95,23 +116,55 @@ const listBooks = asyncHandler(async (req, res) => {
     Number.isFinite(requestedLimit) && requestedLimit > 0
       ? Math.min(requestedLimit, 60)
       : 0;
-  const filter = {};
-
-  if (typeof search === "string" && search.trim()) {
-    const regex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-    filter.$or = [{ title: regex }, { author: regex }, { description: regex }];
-  }
+  const searchText = typeof search === "string" ? search.trim() : "";
+  const textSearch = normalizeTextSearch(searchText);
+  const baseFilter = {};
 
   if (typeof category === "string" && category.trim() && category !== "all") {
-    filter.categories = category.trim();
+    baseFilter.categories = category.trim();
   }
 
-  const query = Book.find(filter).sort({ published: -1, createdAt: -1 });
-  if (limit > 0) {
-    query.skip((page - 1) * limit).limit(limit);
+  const filter = { ...baseFilter };
+  if (textSearch) {
+    filter.$text = {
+      $search: textSearch,
+      $caseSensitive: false,
+      $diacriticSensitive: false,
+    };
+  } else if (searchText) {
+    Object.assign(filter, buildRegexSearchFilter(searchText));
   }
 
-  const [books, total] = await Promise.all([query, Book.countDocuments(filter)]);
+  const buildQuery = (queryFilter, useTextScore = false) => {
+    const query = Book.find(queryFilter).sort(
+      useTextScore
+        ? { score: { $meta: "textScore" }, published: -1, createdAt: -1 }
+        : { published: -1, createdAt: -1 },
+    );
+
+    if (limit > 0) {
+      query.skip((page - 1) * limit).limit(limit);
+    }
+
+    return query;
+  };
+
+  let [books, total] = await Promise.all([
+    buildQuery(filter, Boolean(textSearch)),
+    Book.countDocuments(filter),
+  ]);
+
+  if (searchText && textSearch && total === 0) {
+    const regexFilter = {
+      ...baseFilter,
+      ...buildRegexSearchFilter(searchText),
+    };
+    [books, total] = await Promise.all([
+      buildQuery(regexFilter),
+      Book.countDocuments(regexFilter),
+    ]);
+  }
+
   res.json({
     books: await attachUserBookState(req.user?._id, books),
     page,

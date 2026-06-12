@@ -106,17 +106,6 @@ function normalizeSearchText(value: string) {
     .toLowerCase();
 }
 
-function bookMatchesQuery(book: Book, query: string) {
-  const normalizedQuery = normalizeSearchText(query.trim());
-  if (!normalizedQuery) return false;
-
-  return [book.title, book.author, book.category, ...(book.categories ?? [])]
-    .filter(Boolean)
-    .some((value) =>
-      normalizeSearchText(value as string).includes(normalizedQuery),
-    );
-}
-
 function getHighlightedRange(value: string, query: string) {
   const normalizedQuery = normalizeSearchText(query.trim());
   if (!normalizedQuery) return null;
@@ -827,7 +816,6 @@ export default function Page() {
     }
   }, []);
   const [books, setBooks] = useState<Book[]>([]);
-  const [allBooks, setAllBooks] = useState<Book[]>([]);
   const [libraryBooks, setLibraryBooks] = useState<Book[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<ApiPlaylist[]>([]);
@@ -1045,19 +1033,8 @@ export default function Page() {
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        let sourceBooks = allBooks;
-
-        if (sourceBooks.length === 0) {
-          const bookData = await listBooks({});
-          sourceBooks = bookData.books.map(toReaderBook);
-          if (!cancelled) setAllBooks(sourceBooks);
-        }
-
-        const nextResults = sourceBooks
-          .filter((book) => bookMatchesQuery(book, query))
-          .slice(0, 8);
-
-        if (!cancelled) setSearchResults(nextResults);
+        const bookData = await listBooks({ search: query, limit: 8 });
+        if (!cancelled) setSearchResults(bookData.books.map(toReaderBook));
       } catch (error) {
         if (!cancelled) setSearchResults([]);
       } finally {
@@ -1069,14 +1046,13 @@ export default function Page() {
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [allBooks, search, user]);
+  }, [search, user]);
 
   async function handleLogout() {
     try {
       await logoutUser();
       setUser(null);
       setBooks([]);
-      setAllBooks([]);
       setLibraryBooks([]);
       setPlaylists([]);
       setSearch("");
@@ -1102,7 +1078,7 @@ export default function Page() {
           item.id === book.id ? { ...item, saved: nextSaved } : item,
         ),
       );
-      setAllBooks((items) =>
+      setSearchResults((items) =>
         items.map((item) =>
           item.id === book.id ? { ...item, saved: nextSaved } : item,
         ),
