@@ -4,13 +4,22 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const Book = require("./models/Book");
 const Bookmark = require("./models/Bookmark");
+const Category = require("./models/Category");
 const MusicTrack = require("./models/MusicTrack");
 const Playlist = require("./models/Playlist");
 const ReadingProgress = require("./models/ReadingProgress");
 const User = require("./models/User");
-const { seedBooks } = require("./seed");
+const { seedBooks, seedCategories } = require("./seed");
 
-const models = [User, Book, Bookmark, ReadingProgress, MusicTrack, Playlist];
+const models = [
+  User,
+  Category,
+  Book,
+  Bookmark,
+  ReadingProgress,
+  MusicTrack,
+  Playlist,
+];
 
 async function initDatabase() {
   await connectDB();
@@ -21,7 +30,12 @@ async function initDatabase() {
     console.log(`Ready collection: ${model.collection.name}`);
   }
 
-  await seedBooks();
+  await seedCategories();
+  if (process.env.SEED_BOOKS_ON_START === "true") {
+    await seedBooks();
+  } else {
+    console.log("Skipped book seed. Set SEED_BOOKS_ON_START=true to enable it.");
+  }
   console.log("Database schema, indexes, and seed data are ready.");
 }
 

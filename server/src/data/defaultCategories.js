@@ -1,0 +1,32 @@
+const DEFAULT_CATEGORIES = [
+  { sourceValue: 283, name: "Chính trị – Lịch sử" },
+  { sourceValue: 36, name: "Danh nhân – Tự truyện" },
+  { sourceValue: 86, name: "Dạy làm giàu" },
+  { sourceValue: 6057, name: "Du ký" },
+  { sourceValue: 3, name: "Học ngoại ngữ" },
+  { sourceValue: 472, name: "Khoa học – Kỹ thuật" },
+  { sourceValue: 629, name: "Kiếm hiệp – Tiên hiệp" },
+  { sourceValue: 6080, name: "Kiến Trúc – Xây Dựng" },
+  { sourceValue: 39, name: "Kinh tế – Quản lý" },
+  { sourceValue: 13, name: "Kỹ năng – Tư duy" },
+  { sourceValue: 215, name: "Ngôn tình – Đam mỹ" },
+  { sourceValue: 263, name: "Nuôi dạy con" },
+  { sourceValue: 92, name: "Ôn thi THPT" },
+  { sourceValue: 47, name: "Sách hay khuyên đọc" },
+  { sourceValue: 5457, name: "Sách tham khảo" },
+  { sourceValue: 1, name: "Sắp ra mắt" },
+  { sourceValue: 1105, name: "Triết học" },
+  { sourceValue: 155, name: "Trinh thám – Kinh dị" },
+  { sourceValue: 237, name: "Truyện cười" },
+  { sourceValue: 1092, name: "Truyện tranh – Manga" },
+  { sourceValue: 580, name: "Tử vi – Phong thủy" },
+  { sourceValue: 235, name: "Văn hóa – Tôn giáo" },
+  { sourceValue: 28, name: "Văn học" },
+  { sourceValue: 357, name: "Y học – Sức khỏe" },
+].map((category, index) => ({
+  ...category,
+  order: index + 1,
+  active: true,
+}));
+
+module.exports = { DEFAULT_CATEGORIES };

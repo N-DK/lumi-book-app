@@ -10,6 +10,7 @@ const configurePassport = require("./config/passport");
 const authRoutes = require("./routes/authRoutes");
 const bookRoutes = require("./routes/bookRoutes");
 const bookmarkRoutes = require("./routes/bookmarkRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
 const playlistRoutes = require("./routes/playlistRoutes");
 const progressRoutes = require("./routes/progressRoutes");
 const userRoutes = require("./routes/userRoutes");
@@ -58,6 +59,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/categories", categoryRoutes);
 app.use("/api/books", bookRoutes);
 app.use("/api/bookmarks", bookmarkRoutes);
 app.use("/api/progress", progressRoutes);

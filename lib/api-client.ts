@@ -272,7 +272,7 @@ export async function listBooks(query: BookQuery = {}) {
 }
 
 export async function listCategories() {
-  return apiFetch<{ categories: string[] }>("/books/categories")
+  return apiFetch<{ categories: string[] }>("/categories")
 }
 
 export async function getBook(id: string) {

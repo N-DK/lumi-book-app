@@ -1,6 +1,7 @@
 const { Readable } = require("stream");
 const Bookmark = require("../models/Bookmark");
 const Book = require("../models/Book");
+const Category = require("../models/Category");
 const ReadingProgress = require("../models/ReadingProgress");
 const asyncHandler = require("../utils/asyncHandler");
 
@@ -211,8 +212,23 @@ const deleteBook = asyncHandler(async (req, res) => {
 });
 
 const listCategories = asyncHandler(async (_req, res) => {
-  const categories = await Book.distinct("categories");
-  res.json({ categories: categories.filter(Boolean).sort((a, b) => a.localeCompare(b, "vi")) });
+  const categoryDocs = await Category.find({ active: true })
+    .sort({ order: 1, name: 1 })
+    .select("name -_id")
+    .lean();
+  const categories = categoryDocs.map((item) => item.name).filter(Boolean);
+
+  if (categories.length > 0) {
+    res.json({ categories });
+    return;
+  }
+
+  const fallbackCategories = await Book.distinct("categories");
+  res.json({
+    categories: fallbackCategories
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "vi")),
+  });
 });
 
 const downloadBook = asyncHandler(async (req, res) => {
