@@ -1,6 +1,7 @@
 "use client";
 
 import { Bookshelf } from "@/components/bookshelf";
+import { BookDetail } from "@/components/book-detail";
 import { MusicPlayer } from "@/components/music-player";
 import { RainOverlay } from "@/components/rain-overlay";
 import { Reader, type ReaderProgressUpdate } from "@/components/reader";
@@ -9,6 +10,7 @@ import {
   ApiError,
   type ApiPlaylist,
   type AuthUser,
+  getBook,
   getCurrentUser,
   getYoutubeTrackInfo,
   listBooks,
@@ -93,6 +95,27 @@ function getTabFromPathname(pathname: string | null): AppTab {
 
 function getTabHref(tab: AppTab) {
   return `/${tab}`;
+}
+
+function getBookIdFromPathname(pathname: string | null): string | null {
+  const segments = pathname?.split("/").filter(Boolean) ?? [];
+  if (segments[0] === "book" && segments[1]) return segments[1];
+  return null;
+}
+
+function getReadIdFromPathname(pathname: string | null): string | null {
+  const segments = pathname?.split("/").filter(Boolean) ?? [];
+  if (segments[0] === "read" && segments[1]) return segments[1];
+  return null;
+}
+
+// getBook (GET /books/:id) không trả tiến độ đọc, nên khi refetch theo URL ta
+// giữ lại progress đã có sẵn từ danh sách để thanh "Đã đọc %" không bị tắt.
+function withPreservedProgress(next: Book, prev: Book | null): Book {
+  if (prev && prev.id === next.id && prev.progress && !next.progress) {
+    return { ...next, progress: prev.progress };
+  }
+  return next;
 }
 
 function getErrorMessage(error: unknown) {
@@ -898,6 +921,49 @@ export default function Page() {
   );
   const [category, setCategory] = useState("all");
   const [openBook, setOpenBook] = useState<Book | null>(null);
+  const [detailBook, setDetailBook] = useState<Book | null>(null);
+  const openDetail = useCallback((book: Book) => {
+    setDetailBook(book);
+    const href = `/book/${book.id}`;
+    if (typeof window !== "undefined" && window.location.pathname !== href) {
+      window.history.pushState({ bookId: book.id }, "", href);
+    }
+  }, []);
+  const closeDetail = useCallback(() => {
+    setDetailBook(null);
+    if (typeof window === "undefined") return;
+    if (getBookIdFromPathname(window.location.pathname)) {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        const href = getTabHref("discover");
+        window.history.pushState({ tab: "discover" }, "", href);
+        setActiveTabState("discover");
+      }
+    }
+  }, []);
+  const openReader = useCallback((book: Book) => {
+    // Giữ nguyên detailBook để khi đóng reader (history.back về /book/:id)
+    // trang chi tiết hiện lại ngay, không lộ tab discover trong lúc fetch.
+    setOpenBook(book);
+    const href = `/read/${book.id}`;
+    if (typeof window !== "undefined" && window.location.pathname !== href) {
+      window.history.pushState({ readId: book.id }, "", href);
+    }
+  }, []);
+  const closeReader = useCallback(() => {
+    setOpenBook(null);
+    if (typeof window === "undefined") return;
+    if (getReadIdFromPathname(window.location.pathname)) {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        const href = getTabHref("discover");
+        window.history.pushState({ tab: "discover" }, "", href);
+        setActiveTabState("discover");
+      }
+    }
+  }, []);
   const [loadingData, setLoadingData] = useState(false);
   const [loadingMoreBooks, setLoadingMoreBooks] = useState(false);
   const [hasMoreRecommendedBooks, setHasMoreRecommendedBooks] = useState(true);
@@ -953,6 +1019,12 @@ export default function Page() {
   }, [dark]);
 
   useEffect(() => {
+    // Trên /book/:id hoặc /read/:id, overlay che tab nền — giữ nguyên tab hiện
+    // tại để khi đóng không chớp về discover.
+    if (getBookIdFromPathname(pathname) || getReadIdFromPathname(pathname)) {
+      return;
+    }
+
     if (pathname !== "/") {
       setActiveTabState(getTabFromPathname(pathname));
       return;
@@ -963,9 +1035,76 @@ export default function Page() {
     window.history.replaceState({ tab: "discover" }, "", href);
   }, [pathname]);
 
+  // Mở trang chi tiết khi truy cập thẳng URL /book/:id (hoặc điều hướng Next).
+  useEffect(() => {
+    const id = getBookIdFromPathname(pathname);
+    if (!id) return;
+
+    let cancelled = false;
+    getBook(id)
+      .then(({ book }) => {
+        if (!cancelled)
+          setDetailBook((prev) => withPreservedProgress(toReaderBook(book), prev));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  // Mở trình đọc khi truy cập thẳng URL /read/:id (hoặc điều hướng Next).
+  useEffect(() => {
+    const id = getReadIdFromPathname(pathname);
+    if (!id) return;
+
+    let cancelled = false;
+    getBook(id)
+      .then(({ book }) => {
+        if (!cancelled)
+          setOpenBook((prev) => withPreservedProgress(toReaderBook(book), prev));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
   useEffect(() => {
     function handlePopState() {
-      setActiveTabState(getTabFromPathname(window.location.pathname));
+      const path = window.location.pathname;
+      const bookId = getBookIdFromPathname(path);
+      const readId = getReadIdFromPathname(path);
+
+      // Giữ nguyên tab khi quay tới /book/:id hoặc /read/:id (overlay che tab nền).
+      if (!bookId && !readId) {
+        setActiveTabState(getTabFromPathname(path));
+      }
+
+      if (bookId) {
+        getBook(bookId)
+          .then(({ book }) =>
+            setDetailBook((prev) =>
+              withPreservedProgress(toReaderBook(book), prev),
+            ),
+          )
+          .catch(() => {});
+      } else {
+        setDetailBook(null);
+      }
+
+      if (readId) {
+        getBook(readId)
+          .then(({ book }) =>
+            setOpenBook((prev) =>
+              withPreservedProgress(toReaderBook(book), prev),
+            ),
+          )
+          .catch(() => {});
+      } else {
+        setOpenBook(null);
+      }
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -1279,6 +1418,9 @@ export default function Page() {
       setOpenBook((current) =>
         current?.id === book.id ? applyProgress(current) : current,
       );
+      setDetailBook((current) =>
+        current?.id === book.id ? applyProgress(current) : current,
+      );
     } catch (error) {
       console.warn("Không lưu được tiến độ đọc.", error);
     }
@@ -1355,7 +1497,7 @@ export default function Page() {
         searchLoading={searchLoading}
         user={user}
         onLogout={handleLogout}
-        onOpenBook={setOpenBook}
+        onOpenBook={openDetail}
         onClearSearch={() => {
           setSearch("");
           setSearchResults([]);
@@ -1405,7 +1547,7 @@ export default function Page() {
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
                   <ContinueReadingHero
                     book={continueBook}
-                    onContinue={() => setOpenBook(continueBook)}
+                    onContinue={() => openReader(continueBook)}
                   />
                   <StatsCards
                     readingCount={readingCount}
@@ -1458,7 +1600,7 @@ export default function Page() {
                       bookmarkingBookIds={bookmarkingBookIds}
                       showProgress
                       emptyLabel="Chưa tìm thấy sách phù hợp."
-                      onOpen={setOpenBook}
+                      onOpen={openDetail}
                       onToggleBookmark={handleToggleBookmark}
                     />
                     {hasMoreRecommendedBooks && (
@@ -1515,7 +1657,7 @@ export default function Page() {
                         ? "Bạn chưa đọc sách nào."
                         : "Bạn chưa lưu sách nào."
                     }
-                    onOpen={setOpenBook}
+                    onOpen={openDetail}
                     onToggleBookmark={handleToggleBookmark}
                   />
                 )}
@@ -1559,11 +1701,39 @@ export default function Page() {
       )}
 
       <AnimatePresence>
+        {detailBook && (
+          <BookDetail
+            key={detailBook.id}
+            book={detailBook}
+            similarBooks={books
+              .filter(
+                (candidate) =>
+                  candidate.id !== detailBook.id &&
+                  (candidate.categories ?? [candidate.category]).some(
+                    (cat) =>
+                      cat &&
+                      (detailBook.categories ?? [detailBook.category]).includes(
+                        cat,
+                      ),
+                  ),
+              )
+              .slice(0, 4)}
+            isBookmarked={savedBookIds.has(detailBook.id)}
+            isBookmarking={bookmarkingBookIds.has(detailBook.id)}
+            onClose={closeDetail}
+            onToggleBookmark={handleToggleBookmark}
+            onOpenBook={openDetail}
+            onRead={(book) => openReader(book)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {openBook && (
           <Reader
             key={openBook.id}
             book={openBook}
-            onClose={() => setOpenBook(null)}
+            onClose={closeReader}
             onProgressChange={handleProgressChange}
             isBookmarked={savedBookIds.has(openBook.id)}
             isBookmarking={bookmarkingBookIds.has(openBook.id)}

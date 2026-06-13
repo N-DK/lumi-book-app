@@ -6,6 +6,34 @@ const connectDB = require("./config/db");
 const Book = require("./models/Book");
 const { fetchBookFile, getBookFileContentType } = require("./services/bookFileSource");
 
+// Chỉ những host này mới cần đẩy lên Blob: hoặc bị Cloudflare chặn IP Vercel,
+// hoặc không phải link tải trực tiếp như Google Docs/Drive. Mặc định bỏ qua
+// docs.google.com / drive.google.com (chiếm ~90% sách, đọc thẳng từ source vẫn được).
+const DEFAULT_BOOK_FILE_HOSTS = [
+  "taisachhay.net",
+  "media.metaisach.com",
+  "mega.nz",
+  "app.box.com",
+  "www.dropbox.com",
+  "www.4shared.com",
+  "archive.org",
+  "online.fliphtml5.com",
+  "onedrive.live.com",
+  "compress-pdf.vietdreamhouse.com",
+  "static-xuatban.ebook365.vn",
+  "www.terabox.com",
+  "drive.proton.me",
+  "1drv.ms",
+  "www.fshare.vn",
+  "dn720002.ca.archive.org",
+  "scribsave.net",
+  "up.nhuttruong.com",
+];
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function parseArgs(argv) {
   const args = {
     force: false,
@@ -13,15 +41,25 @@ function parseArgs(argv) {
     id: "",
     limit: 0,
     slug: "",
+    hosts: DEFAULT_BOOK_FILE_HOSTS.slice(),
+    allHosts: false,
   };
 
   for (const item of argv) {
     if (item === "--force") args.force = true;
+    else if (item === "--all-hosts") args.allHosts = true;
     else if (item.startsWith("--format=")) args.format = item.slice("--format=".length);
     else if (item.startsWith("--id=")) args.id = item.slice("--id=".length);
     else if (item.startsWith("--limit=")) {
       args.limit = Math.max(Number.parseInt(item.slice("--limit=".length), 10) || 0, 0);
     } else if (item.startsWith("--slug=")) args.slug = item.slice("--slug=".length);
+    else if (item.startsWith("--hosts=")) {
+      args.hosts = item
+        .slice("--hosts=".length)
+        .split(",")
+        .map((host) => host.trim())
+        .filter(Boolean);
+    }
   }
 
   if (!["epub", "pdf"].includes(args.format)) {
@@ -36,11 +74,22 @@ function getSourceUrl(book, format) {
 }
 
 async function findBooks(args) {
+  const urlField = args.format === "pdf" ? "pdfUrl" : "epubUrl";
   const filter = {};
   if (args.id) filter._id = args.id;
   if (args.slug) filter.slug = args.slug;
   if (!args.id && !args.slug) {
-    filter[args.format === "pdf" ? "pdfUrl" : "epubUrl"] = { $nin: ["", null] };
+    const urlFilter = { $nin: ["", null] };
+
+    // Lọc theo host nguồn (trừ khi --all-hosts). Khớp host hoặc subdomain của nó,
+    // vd "archive.org" cũng bắt "dn720002.ca.archive.org".
+    if (!args.allHosts && args.hosts.length) {
+      const pattern = args.hosts.map(escapeRegExp).join("|");
+      urlFilter.$regex = `^https?://([^/]+\\.)?(${pattern})([:/]|$)`;
+      urlFilter.$options = "i";
+    }
+
+    filter[urlField] = urlFilter;
   }
 
   const query = Book.find(filter);

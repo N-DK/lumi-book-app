@@ -127,6 +127,31 @@ function buildBookFileFailure(candidate, status, detail) {
   };
 }
 
+function pipeBookFileResponse(upstream, res) {
+  const stream = streamFromWebBody(upstream.body);
+
+  stream.on("error", (error) => {
+    console.error("Book file stream failed", error);
+
+    if (res.headersSent) {
+      res.destroy(error);
+      return;
+    }
+
+    res.removeHeader("Content-Disposition");
+    res.removeHeader("Content-Length");
+    res.removeHeader("Content-Type");
+    res.status(502).json({
+      code: "book_file_stream_error",
+      message: "File sách tải quá lâu hoặc kết nối nguồn bị ngắt. Vui lòng thử lại sau.",
+      retryable: true,
+      detail: error instanceof Error ? error.message : "Unknown stream error",
+    });
+  });
+
+  stream.pipe(res);
+}
+
 async function fetchBookFileWithRetry(book, candidate) {
   let lastFailure = null;
 
@@ -283,7 +308,13 @@ const listBooks = asyncHandler(async (req, res) => {
 const getBook = asyncHandler(async (req, res) => {
   const book = await Book.findById(req.params.id);
   if (!book) return res.status(404).json({ message: "Không tìm thấy sách." });
-  res.json({ book });
+
+  const progress = await ReadingProgress.findOne({
+    user: req.user._id,
+    book: book._id,
+  });
+
+  res.json({ book: { ...book.toJSON(), progress: progress ?? null } });
 });
 
 const createBook = asyncHandler(async (req, res) => {
@@ -379,7 +410,7 @@ const downloadBook = asyncHandler(async (req, res) => {
       `inline; filename="${book.slug}.${format}"`,
     );
 
-    streamFromWebBody(upstream.body).pipe(res);
+    pipeBookFileResponse(upstream, res);
     return;
   }
 

@@ -67,12 +67,14 @@ function getBookFileCandidates(book, format, originalUrl) {
   return candidates;
 }
 
-async function fetchBookFile(book, candidate, timeoutMs = 25000) {
-  return fetch(candidate.url, {
+async function fetchBookFile(book, candidate, timeoutMs = 120000) {
+  const fetchOptions = {
     headers: getBookFileRequestHeaders(book, candidate.url),
     redirect: "follow",
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+    ...(timeoutMs > 0 ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+  };
+
+  return fetch(candidate.url, fetchOptions);
 }
 
 function streamFromWebBody(body) {
