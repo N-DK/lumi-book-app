@@ -37,6 +37,10 @@ export interface ApiBook {
   progress?: ReadingProgress | null
 }
 
+export interface ApiReadingProgress extends ReadingProgress {
+  book?: ApiBook | null
+}
+
 export interface ApiTrack {
   id: string
   title: string
@@ -311,7 +315,7 @@ export async function removeBookmark(bookId: string) {
 }
 
 export async function listReadingProgress() {
-  return apiFetch<{ progress: ReadingProgress[] }>("/progress")
+  return apiFetch<{ progress: ApiReadingProgress[] }>("/progress")
 }
 
 export async function getReadingProgress(bookId: string) {

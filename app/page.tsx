@@ -15,6 +15,7 @@ import {
   listBookmarks,
   listCategories,
   listPlaylists,
+  listReadingProgress,
   logoutUser,
   removeBookmark,
   removeTrackFromPlaylist,
@@ -41,7 +42,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
-  Heart,
   History,
   Library,
   LogIn,
@@ -54,8 +54,8 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type AppTab = "discover" | "for-you" | "me" | "favorites" | "recent";
-const APP_TABS: AppTab[] = ["discover", "for-you", "me", "favorites", "recent"];
+type AppTab = "discover" | "for-you" | "me" | "recent";
+const APP_TABS: AppTab[] = ["discover", "for-you", "me", "recent"];
 
 const DEFAULT_BACKGROUND =
   PRESET_SCENES.find((scene) => scene.id === "wood")?.css ??
@@ -260,7 +260,9 @@ function SidebarItem({
   onClick: () => void;
 }) {
   return (
-    <button
+    <motion.button
+      {...pressMotion}
+      whileHover={{ x: 3 }}
       onClick={onClick}
       className={cn(
         "flex h-10 w-full items-center gap-3 rounded-xl px-4 text-left text-[14px] font-medium transition",
@@ -271,7 +273,7 @@ function SidebarItem({
     >
       <Icon className="size-[18px] shrink-0" />
       <span className="truncate">{label}</span>
-    </button>
+    </motion.button>
   );
 }
 
@@ -293,7 +295,10 @@ function AppSidebar({
   user: AuthUser | null;
 }) {
   return (
-    <aside
+    <motion.aside
+      initial={{ opacity: 0, x: -18 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
       className="fixed left-0 top-0 z-[80] flex h-screen flex-col overflow-y-auto border-r border-[#2b2115] bg-[#16110a] px-3 py-5 lumi-scroll"
       style={{ width: SIDEBAR_WIDTH }}
     >
@@ -337,12 +342,6 @@ function AppSidebar({
         <SidebarSectionLabel>Cá nhân</SidebarSectionLabel>
         <nav className="space-y-1">
           <SidebarItem
-            active={activeTab === "favorites"}
-            icon={Heart}
-            label="Nhạc yêu thích"
-            onClick={() => setActiveTab("favorites")}
-          />
-          <SidebarItem
             active={activeTab === "recent"}
             icon={History}
             label="Đọc gần đây"
@@ -370,7 +369,7 @@ function AppSidebar({
           </>
         )}
       </div>
-    </aside>
+    </motion.aside>
   );
 }
 
@@ -408,13 +407,17 @@ function TopHeader({
       : null;
 
   return (
-    <header
+    <motion.header
+      initial={{ opacity: 0, y: -14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
       className="fixed right-0 top-0 z-[70] border-b border-[#2b2115] bg-[#16110a]/[0.92] backdrop-blur"
       style={{ left: SIDEBAR_WIDTH, height: HEADER_HEIGHT }}
     >
       <div className="flex h-full min-w-0 items-center gap-4 px-8">
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          <button
+          <motion.button
+            {...pressMotion}
             type="button"
             onClick={() => prevTab && setActiveTab(prevTab)}
             disabled={!prevTab}
@@ -425,8 +428,9 @@ function TopHeader({
             aria-label="Quay lại"
           >
             <ChevronLeft className="size-5" />
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            {...pressMotion}
             type="button"
             onClick={() => nextTab && setActiveTab(nextTab)}
             disabled={!nextTab}
@@ -437,7 +441,7 @@ function TopHeader({
             aria-label="Đi tiếp"
           >
             <ChevronRight className="size-5" />
-          </button>
+          </motion.button>
         </div>
 
         <label className="relative min-w-[260px] max-w-xl flex-1">
@@ -468,11 +472,16 @@ function TopHeader({
             </button>
           )}
 
-          {showSearchPanel && (
-            <div
-              className="absolute left-0 right-0 top-full z-[100] mt-2 overflow-hidden rounded-xl border border-[#332716] bg-[#1d160d] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.52)]"
-              onMouseDown={(event) => event.preventDefault()}
-            >
+          <AnimatePresence>
+            {showSearchPanel && (
+              <motion.div
+                variants={panelIn}
+                initial="hidden"
+                animate="show"
+                exit="exit"
+                className="absolute left-0 right-0 top-full z-[100] mt-2 overflow-hidden rounded-xl border border-[#332716] bg-[#1d160d] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.52)]"
+                onMouseDown={(event) => event.preventDefault()}
+              >
               {searchLoading && searchResults.length === 0 ? (
                 <div className="space-y-1">
                   {Array.from({ length: 4 }).map((_, index) => (
@@ -521,20 +530,22 @@ function TopHeader({
                   Không tìm thấy sách phù hợp.
                 </div>
               )}
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </label>
 
         <div className="ml-auto flex min-w-0 shrink-0 items-center gap-4">
           {user ? (
             <>
-              <button
+              <motion.button
+                {...pressMotion}
                 onClick={onLogout}
                 className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-[#a3937a] transition hover:text-[#ecdfc5]"
               >
                 <LogOut className="size-4" />
                 Đăng xuất
-              </button>
+              </motion.button>
               <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#d9b98a] text-sm font-bold text-[#241b10] ring-1 ring-[#3a2d1a]">
                 {user.avatarUrl ? (
                   <img
@@ -559,7 +570,7 @@ function TopHeader({
           )}
         </div>
       </div>
-    </header>
+    </motion.header>
   );
 }
 
@@ -608,7 +619,13 @@ function ContinueReadingHero({
   const pageLabel = progress ? progress.currentPage + 1 : 1;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-[#332716] bg-gradient-to-br from-[#261c10] via-[#1f160c] to-[#19120a] p-6 sm:p-8">
+    <motion.section
+      variants={cardIn}
+      initial="hidden"
+      animate="show"
+      whileHover={{ y: -3 }}
+      className="relative overflow-hidden rounded-2xl border border-[#332716] bg-gradient-to-br from-[#261c10] via-[#1f160c] to-[#19120a] p-6 sm:p-8"
+    >
       <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-[#d9b98a]/[0.05]" />
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
         <BookCoverMini book={book} />
@@ -625,17 +642,20 @@ function ContinueReadingHero({
             </p>
           )}
           <div className="mt-6 flex flex-wrap items-center gap-4">
-            <button
+            <motion.button
+              {...pressMotion}
               onClick={onContinue}
               className="inline-flex h-11 items-center rounded-xl border border-[#d9b98a]/40 bg-[#d9b98a]/[0.1] px-5 text-sm font-semibold text-[#e8cf9f] transition hover:bg-[#d9b98a]/[0.18]"
             >
               Tiếp tục — Trang {pageLabel}
-            </button>
+            </motion.button>
             <div className="flex min-w-[180px] flex-1 items-center gap-3">
               <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[#332716]">
-                <div
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${percent}%` }}
+                  transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                   className="h-full rounded-full bg-gradient-to-r from-[#a8895c] to-[#d9b98a] transition-all duration-500"
-                  style={{ width: `${percent}%` }}
                 />
               </div>
               <span className="shrink-0 text-xs tabular-nums text-[#b3a285]">
@@ -645,7 +665,7 @@ function ContinueReadingHero({
           </div>
         </div>
       </div>
-    </section>
+    </motion.section>
   );
 }
 
@@ -659,8 +679,16 @@ function StatsCards({
   onOpenLibrary: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-5">
-      <section className="rounded-2xl border border-[#332716] bg-[#1d160d] p-6">
+    <motion.div
+      variants={staggerContainer}
+      initial="hidden"
+      animate="show"
+      className="flex flex-col gap-5"
+    >
+      <motion.section
+        variants={cardIn}
+        className="rounded-2xl border border-[#332716] bg-[#1d160d] p-6"
+      >
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
           Đang đọc
         </p>
@@ -670,9 +698,12 @@ function StatsCards({
         <p className="mt-2 text-xs text-[#b3a285]">
           {completedCount} cuốn đã đọc xong
         </p>
-      </section>
+      </motion.section>
 
-      <section className="flex flex-1 items-center justify-between gap-4 rounded-2xl border border-[#332716] bg-[#1d160d] p-6">
+      <motion.section
+        variants={cardIn}
+        className="flex flex-1 items-center justify-between gap-4 rounded-2xl border border-[#332716] bg-[#1d160d] p-6"
+      >
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8a744f]">
             Bộ sưu tập
@@ -681,15 +712,16 @@ function StatsCards({
             Kệ sách của tôi
           </p>
         </div>
-        <button
+        <motion.button
+          {...pressMotion}
           onClick={onOpenLibrary}
           className="flex size-11 shrink-0 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a] transition hover:bg-[#2b2115]"
           aria-label="Mở kệ sách của tôi"
         >
           <ArrowRight className="size-5" />
-        </button>
-      </section>
-    </div>
+        </motion.button>
+      </motion.section>
+    </motion.div>
   );
 }
 
@@ -720,10 +752,19 @@ function CategoryTopics({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScroll, setCanScroll] = useState({ left: false, right: false });
 
-  const items = [
-    { value: "all", label: "Tất cả" },
-    ...categories.map((item) => ({ value: item, label: item })),
-  ];
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    const result = [{ key: "all", value: "all", label: "Tất cả" }];
+
+    categories.forEach((item) => {
+      const value = item.trim();
+      if (!value || value === "all" || seen.has(value)) return;
+      seen.add(value);
+      result.push({ key: `category:${value}`, value, label: value });
+    });
+
+    return result;
+  }, [categories]);
 
   const updateScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -750,33 +791,43 @@ function CategoryTopics({
   }
 
   return (
-    <section className="space-y-5">
+    <motion.section
+      variants={riseIn}
+      initial="hidden"
+      animate="show"
+      className="space-y-5"
+    >
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-heading text-[26px] leading-none text-[#f0e6d2]">
           Chủ đề
         </h2>
         {(canScroll.left || canScroll.right) && (
           <div className="flex items-center gap-2">
-            <button
+            <motion.button
+              {...pressMotion}
               onClick={() => scrollTopics(-1)}
               disabled={!canScroll.left}
               className="flex size-9 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a] transition hover:bg-[#2b2115] disabled:cursor-not-allowed disabled:opacity-30"
               aria-label="Cuộn chủ đề sang trái"
             >
               <ChevronLeft className="size-4" />
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              {...pressMotion}
               onClick={() => scrollTopics(1)}
               disabled={!canScroll.right}
               className="flex size-9 items-center justify-center rounded-full border border-[#3a2d1a] bg-[#241b10] text-[#d9b98a] transition hover:bg-[#2b2115] disabled:cursor-not-allowed disabled:opacity-30"
               aria-label="Cuộn chủ đề sang phải"
             >
               <ChevronRight className="size-4" />
-            </button>
+            </motion.button>
           </div>
         )}
       </div>
-      <div
+      <motion.div
+        variants={staggerContainer}
+        initial="hidden"
+        animate="show"
         ref={scrollRef}
         onScroll={updateScroll}
         className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(190px,1fr)] gap-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-4"
@@ -784,8 +835,11 @@ function CategoryTopics({
         {items.map((item, index) => {
           const active = category === item.value;
           return (
-            <button
-              key={item.value}
+            <motion.button
+              key={item.key}
+              variants={cardIn}
+              {...pressMotion}
+              whileHover={{ y: -4, scale: 1.01 }}
               onClick={() => setCategory(item.value)}
               className={cn(
                 "group relative h-24 overflow-hidden rounded-xl p-3 text-left shadow-[0_10px_26px_rgba(0,0,0,0.3)] transition-transform duration-300 hover:-translate-y-1",
@@ -807,11 +861,11 @@ function CategoryTopics({
                 {item.label.charAt(0).toUpperCase()}
               </span>
               <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
-            </button>
+            </motion.button>
           );
         })}
-      </div>
-    </section>
+      </motion.div>
+    </motion.section>
   );
 }
 
@@ -833,6 +887,7 @@ export default function Page() {
   }, []);
   const [books, setBooks] = useState<Book[]>([]);
   const [libraryBooks, setLibraryBooks] = useState<Book[]>([]);
+  const [recentBooks, setRecentBooks] = useState<Book[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<ApiPlaylist[]>([]);
   const [search, setSearch] = useState("");
@@ -845,13 +900,15 @@ export default function Page() {
   const [openBook, setOpenBook] = useState<Book | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [loadingMoreBooks, setLoadingMoreBooks] = useState(false);
-  const [recommendedPage, setRecommendedPage] = useState(1);
   const [hasMoreRecommendedBooks, setHasMoreRecommendedBooks] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [background, setBackground] = useState(DEFAULT_BACKGROUND);
   const [dark, setDark] = useState(true);
   const [rain, setRain] = useState(true);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const loadingMoreBooksRef = useRef(false);
+  const recommendedPageRef = useRef(1);
+  const hasMoreRecommendedBooksRef = useRef(true);
 
   const savedBookIds = useMemo(
     () => new Set(libraryBooks.map((book) => book.id)),
@@ -862,30 +919,30 @@ export default function Page() {
 
   const continueBook = useMemo(
     () =>
-      libraryBooks.find(
+      recentBooks.find(
         (book) =>
           book.progress &&
           !book.progress.completed &&
           book.progress.currentPage > 0,
       ) ??
-      libraryBooks.find((book) => book.progress) ??
+      recentBooks.find((book) => book.progress) ??
       null,
-    [libraryBooks],
+    [recentBooks],
   );
   const readingCount = useMemo(
     () =>
-      libraryBooks.filter((book) => book.progress && !book.progress.completed)
+      recentBooks.filter((book) => book.progress && !book.progress.completed)
         .length,
-    [libraryBooks],
+    [recentBooks],
   );
   const completedCount = useMemo(
     () =>
-      libraryBooks.filter(
+      recentBooks.filter(
         (book) =>
           book.progress &&
           (book.progress.completed || book.progress.percent >= 100),
       ).length,
-    [libraryBooks],
+    [recentBooks],
   );
 
   useEffect(() => {
@@ -913,12 +970,21 @@ export default function Page() {
   }, []);
 
   const refreshLibrary = useCallback(async () => {
-    const [bookmarkData, playlistData] = await Promise.all([
+    const [bookmarkData, playlistData, progressData] = await Promise.all([
       listBookmarks(),
       listPlaylists(),
+      listReadingProgress(),
     ]);
     setLibraryBooks(bookmarkData.books.map(toReaderBook));
     setPlaylists(playlistData.playlists);
+
+    setRecentBooks(
+      progressData.progress
+        .filter((item) => item.book)
+        .map(({ book, ...progress }) =>
+          toReaderBook({ ...book!, progress }),
+        ),
+    );
   }, []);
 
   const refreshDiscover = useCallback(
@@ -939,8 +1005,11 @@ export default function Page() {
         );
         return [...currentBooks, ...nextBooks];
       });
-      setRecommendedPage(bookData.page ?? page);
-      setHasMoreRecommendedBooks(Boolean(bookData.hasMore));
+      const nextPage = bookData.page ?? page;
+      const nextHasMore = Boolean(bookData.hasMore);
+      recommendedPageRef.current = nextPage;
+      hasMoreRecommendedBooksRef.current = nextHasMore;
+      setHasMoreRecommendedBooks(nextHasMore);
     },
     [category],
   );
@@ -998,29 +1067,31 @@ export default function Page() {
       !user ||
       activeTab !== "discover" ||
       loadingData ||
-      loadingMoreBooks ||
-      !hasMoreRecommendedBooks
+      loadingMoreBooksRef.current ||
+      !hasMoreRecommendedBooksRef.current
     ) {
       return;
     }
 
+    const nextPage = recommendedPageRef.current + 1;
+    loadingMoreBooksRef.current = true;
     setLoadingMoreBooks(true);
     try {
-      await refreshDiscover(recommendedPage + 1, "append");
+      await refreshDiscover(nextPage, "append");
     } catch (error) {
       setError(getErrorMessage(error));
     } finally {
+      loadingMoreBooksRef.current = false;
       setLoadingMoreBooks(false);
     }
-  }, [
-    activeTab,
-    hasMoreRecommendedBooks,
-    loadingData,
-    loadingMoreBooks,
-    recommendedPage,
-    refreshDiscover,
-    user,
-  ]);
+  }, [activeTab, loadingData, refreshDiscover, user]);
+
+  const isLoadMoreSentinelNearViewport = useCallback(() => {
+    const target = loadMoreRef.current;
+    if (!target) return false;
+    const rect = target.getBoundingClientRect();
+    return rect.top <= window.innerHeight + 420;
+  }, []);
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -1038,6 +1109,29 @@ export default function Page() {
     observer.observe(target);
     return () => observer.disconnect();
   }, [activeTab, hasMoreRecommendedBooks, loadMoreRecommendedBooks]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "discover" ||
+      loadingData ||
+      loadingMoreBooks ||
+      loadingMoreBooksRef.current ||
+      !hasMoreRecommendedBooks ||
+      !isLoadMoreSentinelNearViewport()
+    ) {
+      return;
+    }
+
+    void loadMoreRecommendedBooks();
+  }, [
+    activeTab,
+    books.length,
+    hasMoreRecommendedBooks,
+    isLoadMoreSentinelNearViewport,
+    loadingData,
+    loadingMoreBooks,
+    loadMoreRecommendedBooks,
+  ]);
 
   useEffect(() => {
     const query = search.trim();
@@ -1073,6 +1167,7 @@ export default function Page() {
       setUser(null);
       setBooks([]);
       setLibraryBooks([]);
+      setRecentBooks([]);
       setPlaylists([]);
       setSearch("");
       setSearchResults([]);
@@ -1133,6 +1228,11 @@ export default function Page() {
 
       setBooks((items) => items.map(applyProgress));
       setLibraryBooks((items) => items.map(applyProgress));
+      setRecentBooks((items) => {
+        const updated = applyProgress(book);
+        const withoutCurrent = items.filter((item) => item.id !== book.id);
+        return [updated, ...withoutCurrent];
+      });
       setOpenBook((current) =>
         current?.id === book.id ? applyProgress(current) : current,
       );
@@ -1177,19 +1277,17 @@ export default function Page() {
   if (!user) return <LoadingScreen />;
 
   const libraryTitle =
-    activeTab === "favorites"
-      ? "Nhạc yêu thích"
-      : activeTab === "recent"
+    activeTab === "recent"
         ? "Đọc gần đây"
         : activeTab === "for-you"
           ? "Dành cho bạn"
           : "Kệ sách của tôi";
   const libraryDescription =
-    activeTab === "favorites"
-      ? "Các bài hát bạn đã thêm vào không gian nghe của mình."
-      : activeTab === "recent"
+    activeTab === "recent"
         ? "Sách đang đọc dở và tiến độ đọc gần nhất."
         : "Những cuốn sách bạn đã lưu cùng tiến độ đọc của bạn.";
+  const visibleLibraryBooks =
+    activeTab === "recent" ? recentBooks : libraryBooks;
 
   return (
     <div
@@ -1361,15 +1459,19 @@ export default function Page() {
                   </p>
                 </div>
 
-                {loadingData && libraryBooks.length === 0 ? (
+                {loadingData && visibleLibraryBooks.length === 0 ? (
                   <ShelfSkeleton />
                 ) : (
                   <Bookshelf
-                    books={libraryBooks}
+                    books={visibleLibraryBooks}
                     savedBookIds={savedBookIds}
                     bookmarkingBookIds={bookmarkingBookIds}
                     showProgress
-                    emptyLabel="Bạn chưa lưu sách nào."
+                    emptyLabel={
+                      activeTab === "recent"
+                        ? "Bạn chưa đọc sách nào."
+                        : "Bạn chưa lưu sách nào."
+                    }
                     onOpen={setOpenBook}
                     onToggleBookmark={handleToggleBookmark}
                   />

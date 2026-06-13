@@ -2,7 +2,7 @@ const Playlist = require("../models/Playlist");
 const MusicTrack = require("../models/MusicTrack");
 const asyncHandler = require("../utils/asyncHandler");
 
-const DEFAULT_PLAYLIST_NAME = "Nhạc yêu thích";
+const DEFAULT_PLAYLIST_NAME = "Danh sách phát";
 
 async function ensureDefaultPlaylist(userId) {
   const playlist = await Playlist.findOneAndUpdate(

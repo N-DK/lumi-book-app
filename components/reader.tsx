@@ -3,6 +3,15 @@
 import { ProgressSlider } from "@/components/progress-slider";
 import type { Book } from "@/lib/lumi-data";
 import { fadeIn, panelIn } from "@/lib/motion";
+import {
+  getReaderPageCache,
+  getReaderState,
+  setActiveReaderBook,
+  setReaderPageCache,
+  updateReaderState,
+  type StoredReaderMode,
+  type StoredReaderThemeKey,
+} from "@/lib/reader-store";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -46,8 +55,8 @@ export interface ReaderProgressUpdate {
 }
 
 /* ---------- Reader themes (theo thiết kế LUMI) ---------- */
-type ReaderThemeKey = "midnight" | "sepia" | "paper";
-type ReaderMode = "scroll" | "page";
+type ReaderThemeKey = StoredReaderThemeKey;
+type ReaderMode = StoredReaderMode;
 
 interface ReaderTheme {
   label: string;
@@ -125,14 +134,19 @@ export function Reader({
   isBookmarking = false,
   onToggleBookmark,
 }: ReaderProps) {
-  const [themeKey, setThemeKey] = useState<ReaderThemeKey>("sepia");
-  const [mode, setMode] = useState<ReaderMode>("page");
-  const [fontSize, setFontSize] = useState(18);
+  const storedState = getReaderState(book.id);
+  const [themeKey, setThemeKey] = useState<ReaderThemeKey>(
+    () => storedState?.themeKey ?? "sepia",
+  );
+  const [mode, setMode] = useState<ReaderMode>(
+    () => storedState?.mode ?? "page",
+  );
+  const [fontSize, setFontSize] = useState(() => storedState?.fontSize ?? 18);
   const [showSettings, setShowSettings] = useState(false);
   const lastPageRef = useRef<number | null>(null);
   const [pageInfo, setPageInfo] = useState({
-    page: book.progress?.currentPage ?? 0,
-    total: book.progress?.totalPages ?? 0,
+    page: storedState?.currentPage ?? book.progress?.currentPage ?? 0,
+    total: storedState?.totalPages ?? book.progress?.totalPages ?? 0,
   });
 
   const t = READER_THEMES[themeKey];
@@ -142,24 +156,67 @@ export function Reader({
       : Math.min(100, Math.max(0, book.progress?.percent ?? 0));
 
   useEffect(() => {
+    const saved = getReaderState(book.id);
+    const page = saved?.currentPage ?? book.progress?.currentPage ?? 0;
+    const total = saved?.totalPages ?? book.progress?.totalPages ?? 0;
+
+    setActiveReaderBook(book.id);
+    setThemeKey(saved?.themeKey ?? "sepia");
+    setMode(saved?.mode ?? "page");
+    setFontSize(saved?.fontSize ?? 18);
+    lastPageRef.current = page;
+    setPageInfo({ page, total });
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      setActiveReaderBook(null);
+    };
+  }, [book.id, book.progress?.currentPage, book.progress?.totalPages, onClose]);
+
+  useEffect(() => {
+    updateReaderState(book.id, {
+      currentPage: pageInfo.page,
+      totalPages: pageInfo.total,
+      currentChapter:
+        getReaderState(book.id)?.currentChapter ??
+        book.progress?.currentChapter ??
+        "",
+      fontSize,
+      mode,
+      themeKey,
+    });
+  }, [
+    book.id,
+    book.progress?.currentChapter,
+    fontSize,
+    mode,
+    pageInfo.page,
+    pageInfo.total,
+    themeKey,
+  ]);
 
   const handleProgress = useCallback(
     (currentPage: number, totalPages: number) => {
       lastPageRef.current = currentPage;
       setPageInfo({ page: currentPage, total: totalPages });
+      updateReaderState(book.id, {
+        currentPage,
+        totalPages,
+        fontSize,
+        mode,
+        themeKey,
+      });
       onProgressChange?.(book, { currentPage, totalPages });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [book.id],
+    [book.id, fontSize, mode, themeKey],
   );
 
-  const initialPage = lastPageRef.current ?? book.progress?.currentPage ?? 0;
+  const initialPage = lastPageRef.current ?? pageInfo.page ?? 0;
 
   const bodyProps = {
     book,
@@ -409,7 +466,7 @@ export function Reader({
 
       {/* Body */}
       <motion.div
-        key={`${book.id}-${mode}-${themeKey}`}
+        key={book.id}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
@@ -613,6 +670,10 @@ async function readBookArrayBuffer(book: Book) {
   const response = await fetch(book.fileUrl, { credentials: "include" });
   if (!response.ok) throw new Error("Cannot fetch book file");
   return response.arrayBuffer();
+}
+
+function getReaderPageCacheKey(book: Book, kind: "pdf" | "epub") {
+  return `${kind}:${book.id}:${book.fileUrl ?? ""}`;
 }
 
 function resolveEpubAssetPath(opfPath: string, href: string) {
@@ -1274,7 +1335,7 @@ function BookFlipReader({
           />
 
           <HTMLFlipBook
-            key={`${readerKey}-${t.pageBg}-${size.width}-${size.height}`}
+            key={`${readerKey}-${size.width}-${size.height}-${contentTotal}`}
             ref={flipRef}
             width={pageWidth + 10}
             height={flipHeight + 10}
@@ -1346,13 +1407,26 @@ function BookFlipReader({
 /* ---------- PDF Reader ---------- */
 function PdfReader(props: ReaderBodyProps) {
   const { book, t } = props;
-  const [pages, setPages] = useState<FlipPageData[]>([]);
-  const [status, setStatus] = useState("Đang mở PDF...");
+  const cacheKey = getReaderPageCacheKey(book, "pdf");
+  const cachedPages = getReaderPageCache<FlipPageData[]>(cacheKey);
+  const [pages, setPages] = useState<FlipPageData[]>(() => cachedPages ?? []);
+  const [status, setStatus] = useState(() =>
+    cachedPages ? "" : "Đang mở PDF...",
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let loadingTask: any;
+
+    if (cachedPages) {
+      setPages(cachedPages);
+      setError(null);
+      setStatus("");
+      return () => {
+        cancelled = true;
+      };
+    }
 
     async function init() {
       setPages([]);
@@ -1412,6 +1486,7 @@ function PdfReader(props: ReaderBodyProps) {
 
         await pdf.destroy();
         if (!cancelled) {
+          setReaderPageCache(cacheKey, renderedPages);
           setPages(renderedPages);
           setStatus("");
         }
@@ -1430,7 +1505,7 @@ function PdfReader(props: ReaderBodyProps) {
       void loadingTask?.destroy?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, book.fileUrl, t.pageBg]);
+  }, [book.id, book.fileUrl]);
 
   if (error) return <ReaderStatus message={error} t={props.t} />;
   if (status) return <ReaderStatus message={status} t={props.t} />;
@@ -1440,12 +1515,25 @@ function PdfReader(props: ReaderBodyProps) {
 /* ---------- EPUB Reader ---------- */
 function EpubReader(props: ReaderBodyProps) {
   const { book } = props;
-  const [pages, setPages] = useState<FlipPageData[]>([]);
-  const [status, setStatus] = useState("Đang mở EPUB...");
+  const cacheKey = getReaderPageCacheKey(book, "epub");
+  const cachedPages = getReaderPageCache<FlipPageData[]>(cacheKey);
+  const [pages, setPages] = useState<FlipPageData[]>(() => cachedPages ?? []);
+  const [status, setStatus] = useState(() =>
+    cachedPages ? "" : "Đang mở EPUB...",
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (cachedPages) {
+      setPages(cachedPages);
+      setError(null);
+      setStatus("");
+      return () => {
+        cancelled = true;
+      };
+    }
 
     async function init() {
       setPages([]);
@@ -1525,7 +1613,9 @@ function EpubReader(props: ReaderBodyProps) {
         }
 
         if (!cancelled) {
-          setPages(paginateTextBlocks(blocks));
+          const nextPages = paginateTextBlocks(blocks);
+          setReaderPageCache(cacheKey, nextPages);
+          setPages(nextPages);
           setStatus("");
         }
       } catch (error) {

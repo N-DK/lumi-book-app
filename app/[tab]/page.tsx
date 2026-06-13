@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Page from "../page";
 
-const TABS = new Set(["discover", "for-you", "me", "favorites", "recent"]);
+const TABS = new Set(["discover", "for-you", "me", "recent"]);
 
 export default async function TabPage({
   params,

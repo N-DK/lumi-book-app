@@ -961,7 +961,7 @@ export function MusicPlayer({
                   Danh sách phát
                 </p>
                 <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a8895c]">
-                  {tracks.length} bài trong {playlist?.name ?? "Nhạc yêu thích"}
+                  {tracks.length} bài trong {playlist?.name ?? "Danh sách phát"}
                 </p>
               </div>
               <button
@@ -1088,7 +1088,7 @@ export function MusicPlayer({
                   <p className="mt-1 truncate px-1 text-xs text-[#a3937a]">
                     {queueCurrentTrack
                       ? `Sau ${queueCurrentTrack.title}`
-                      : (playlist?.name ?? "Nhạc yêu thích")}
+                      : (playlist?.name ?? "Danh sách phát")}
                   </p>
 
                   <div className="mt-3 space-y-1.5">

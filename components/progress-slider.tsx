@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import { useRef } from "react";
 
 interface ProgressSliderProps {
@@ -134,12 +135,16 @@ export function ProgressSlider({
         className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full"
         style={{ backgroundColor: trackColor }}
       />
-      <span
+      <motion.span
         className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full"
+        animate={{ width: `${percent}%` }}
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
         style={{ width: `${percent}%`, backgroundColor: fillColor }}
       />
-      <span
+      <motion.span
         className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_0_3px_rgba(217,185,138,0.14),0_2px_8px_rgba(0,0,0,0.28)]"
+        animate={{ left: `${percent}%` }}
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
         style={{
           left: `${percent}%`,
           backgroundColor: thumbColor,

@@ -1,5 +1,6 @@
 "use client"
 
+import { AnimatePresence, motion } from "framer-motion"
 import { useEffect, useMemo, useState } from "react"
 
 function seededRainValue(seed: number) {
@@ -26,26 +27,34 @@ export function RainOverlay({ enabled }: { enabled: boolean }) {
     setMounted(true)
   }, [])
 
-  if (!mounted || !enabled) return null
+  if (!mounted) return null
 
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 overflow-hidden"
-    >
-      {drops.map((d) => (
-        <span
-          key={d.id}
-          className="lumi-raindrop"
-          style={{
-            left: `${d.left}%`,
-            height: `${d.height}px`,
-            opacity: d.opacity,
-            animationDelay: `${d.delay}s`,
-            animationDuration: `${d.duration}s`,
-          }}
-        />
-      ))}
-    </div>
+    <AnimatePresence>
+      {enabled && (
+        <motion.div
+          aria-hidden="true"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+        >
+          {drops.map((d) => (
+            <span
+              key={d.id}
+              className="lumi-raindrop"
+              style={{
+                left: `${d.left}%`,
+                height: `${d.height}px`,
+                opacity: d.opacity,
+                animationDelay: `${d.delay}s`,
+                animationDuration: `${d.duration}s`,
+              }}
+            />
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
