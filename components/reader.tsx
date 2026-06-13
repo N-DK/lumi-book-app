@@ -668,8 +668,26 @@ async function readBookArrayBuffer(book: Book) {
   if (!book.fileUrl) throw new Error("Missing book file");
 
   const response = await fetch(book.fileUrl, { credentials: "include" });
-  if (!response.ok) throw new Error("Cannot fetch book file");
+  if (!response.ok) throw new Error(await getBookFetchError(response));
   return response.arrayBuffer();
+}
+
+async function getBookFetchError(response: Response) {
+  const fallback = `Không tải được file sách (${response.status}).`;
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const data = (await response.json().catch(() => null)) as {
+      message?: unknown;
+    } | null;
+    return typeof data?.message === "string" && data.message.trim()
+      ? data.message
+      : fallback;
+  }
+
+  const text = await response.text().catch(() => "");
+  const cleanText = text.replace(/\s+/g, " ").trim();
+  return cleanText ? cleanText.slice(0, 180) : fallback;
 }
 
 function getReaderPageCacheKey(book: Book, kind: "pdf" | "epub") {

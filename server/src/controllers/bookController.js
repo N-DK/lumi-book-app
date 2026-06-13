@@ -1,8 +1,13 @@
-const { Readable } = require("stream");
 const Bookmark = require("../models/Bookmark");
 const Book = require("../models/Book");
 const Category = require("../models/Category");
 const ReadingProgress = require("../models/ReadingProgress");
+const {
+  fetchBookFile,
+  getBookFileCandidates,
+  getBookFileContentType,
+  streamFromWebBody,
+} = require("../services/bookFileSource");
 const asyncHandler = require("../utils/asyncHandler");
 
 const SPINES = [
@@ -243,18 +248,54 @@ const downloadBook = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Sách này chưa có file để đọc." });
   }
 
-  const upstream = await fetch(fileUrl);
-  if (!upstream.ok || !upstream.body) {
-    return res.status(502).json({ message: "Không tải được file sách từ nguồn." });
+  const candidates = getBookFileCandidates(book, format, fileUrl);
+  let lastFailure = null;
+
+  for (const candidate of candidates) {
+    let upstream;
+
+    try {
+      upstream = await fetchBookFile(book, candidate);
+    } catch (error) {
+      lastFailure = {
+        source: candidate.kind,
+        status: 0,
+        detail: error instanceof Error ? error.message : "Unknown fetch error",
+      };
+      continue;
+    }
+
+    if (!upstream.ok || !upstream.body) {
+      const upstreamText = await upstream.text().catch(() => "");
+      lastFailure = {
+        source: candidate.kind,
+        status: upstream.status,
+        detail: upstreamText.replace(/\s+/g, " ").trim().slice(0, 180),
+      };
+      continue;
+    }
+
+    const contentLength = upstream.headers.get("content-length");
+
+    res.setHeader("Content-Type", getBookFileContentType(format, upstream));
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${book.slug}.${format}"`,
+    );
+
+    streamFromWebBody(upstream.body).pipe(res);
+    return;
   }
 
-  res.setHeader("Content-Type", format === "pdf" ? "application/pdf" : "application/epub+zip");
-  res.setHeader(
-    "Content-Disposition",
-    `inline; filename="${book.slug}.${format}"`,
-  );
-
-  Readable.fromWeb(upstream.body).pipe(res);
+  res.status(502).json({
+    message:
+      "Không tải được file sách. Nguồn gốc đang chặn server production; hãy upload file lên object storage/CDN và cấu hình BOOK_FILE_BASE_URL.",
+    upstreamStatus: lastFailure?.status ?? 0,
+    source: lastFailure?.source ?? "unknown",
+    detail: lastFailure?.detail ?? "",
+  });
 });
 
 module.exports = {

@@ -8,6 +8,7 @@
     "server": "node server/src/server.js",
     "server:dev": "node --watch server/src/server.js",
     "db:init": "node server/src/init-db.js",
+    "books:download-files": "node server/src/download-book-files.js",
     "seed:books": "node server/src/seed.js",
     "build": "next build",
     "start": "next start",

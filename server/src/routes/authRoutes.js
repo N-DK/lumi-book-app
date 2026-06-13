@@ -4,6 +4,15 @@ const { getCurrentUser, logout } = require("../controllers/authController");
 
 const router = express.Router();
 
+function getRequestOrigin(req) {
+  const forwardedProto = req.get("x-forwarded-proto");
+  const forwardedHost = req.get("x-forwarded-host");
+  const protocol = forwardedProto?.split(",")[0]?.trim() || req.protocol;
+  const host = forwardedHost?.split(",")[0]?.trim() || req.get("host");
+
+  return `${protocol}://${host}`;
+}
+
 router.get("/me", getCurrentUser);
 
 router.get("/google", (req, res, next) => {
@@ -16,18 +25,24 @@ router.get("/google", (req, res, next) => {
   return passport.authenticate("google", {
     scope: ["profile", "email"],
     prompt: "select_account",
+    callbackURL: `${getRequestOrigin(req)}/api/auth/google/callback`,
   })(req, res, next);
 });
 
-router.get(
-  "/google/callback",
-  passport.authenticate("google", {
-    failureRedirect: `${process.env.CLIENT_URL ?? "http://localhost:3000"}/login?error=google`,
-  }),
-  (_req, res) => {
-    res.redirect(process.env.CLIENT_URL ?? "http://localhost:3000");
-  },
-);
+router.get("/google/callback", (req, res, next) => {
+  const origin = getRequestOrigin(req);
+
+  passport.authenticate("google", (error, user) => {
+    if (error || !user) {
+      return res.redirect(`${origin}/login?error=google`);
+    }
+
+    return req.logIn(user, (loginError) => {
+      if (loginError) return next(loginError);
+      return res.redirect(origin);
+    });
+  })(req, res, next);
+});
 
 router.post("/logout", logout);
 

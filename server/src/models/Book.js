@@ -56,6 +56,58 @@ const bookSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    storedFiles: {
+      epub: {
+        url: {
+          type: String,
+          default: "",
+        },
+        key: {
+          type: String,
+          default: "",
+        },
+        sourceUrl: {
+          type: String,
+          default: "",
+        },
+        contentType: {
+          type: String,
+          default: "",
+        },
+        size: {
+          type: Number,
+          default: 0,
+        },
+        cachedAt: {
+          type: Date,
+        },
+      },
+      pdf: {
+        url: {
+          type: String,
+          default: "",
+        },
+        key: {
+          type: String,
+          default: "",
+        },
+        sourceUrl: {
+          type: String,
+          default: "",
+        },
+        contentType: {
+          type: String,
+          default: "",
+        },
+        size: {
+          type: Number,
+          default: 0,
+        },
+        cachedAt: {
+          type: Date,
+        },
+      },
+    },
     kind: {
       type: String,
       enum: ["pdf", "epub", "sample"],
