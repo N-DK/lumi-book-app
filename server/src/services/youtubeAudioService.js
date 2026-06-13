@@ -2,13 +2,18 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { randomUUID } = require("crypto");
-const youtubeDl = require("youtube-dl-exec");
-const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
 
 const SEARCH_DEFAULT_LIMIT = 5;
 const SEARCH_MAX_LIMIT = 20;
 const SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
 const SEARCH_CACHE_MAX_ENTRIES = 40;
+const YOUTUBE_SEARCH_URL = "https://www.youtube.com/results";
+const YOUTUBE_OEMBED_URL = "https://www.youtube.com/oembed";
+const FETCH_HEADERS = {
+  "accept-language": "vi,en-US;q=0.9,en;q=0.8",
+  "user-agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+};
 
 const YOUTUBE_HOSTS = new Set([
   "youtube.com",
@@ -92,7 +97,41 @@ function normalizeYoutubeUrl(value) {
   return parsed.toString();
 }
 
+function getYoutubeVideoId(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return "";
+  }
+
+  const host = parsed.hostname.replace(/^www\./, "");
+  if (host === "youtu.be") {
+    return parsed.pathname.split("/").filter(Boolean)[0] ?? "";
+  }
+
+  if (
+    host === "youtube.com" ||
+    host === "m.youtube.com" ||
+    host === "music.youtube.com"
+  ) {
+    const watchId = parsed.searchParams.get("v");
+    if (watchId) return watchId;
+
+    const [kind, id] = parsed.pathname.split("/").filter(Boolean);
+    if (["embed", "shorts", "live"].includes(kind ?? "") && id) return id;
+  }
+
+  return "";
+}
+
+function getCanonicalYoutubeUrl(sourceUrl) {
+  const videoId = getYoutubeVideoId(sourceUrl);
+  return videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
+}
+
 function getFfmpegDirectory() {
+  const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
   return path.dirname(ffmpegInstaller.path);
 }
 
@@ -124,6 +163,56 @@ function getYoutubeSourceUrl(info) {
   return "";
 }
 
+function getText(node) {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (node.simpleText) return node.simpleText;
+  if (Array.isArray(node.runs)) {
+    return node.runs.map((run) => run.text ?? "").join("").trim();
+  }
+  return "";
+}
+
+function parseDuration(value) {
+  if (!value || typeof value !== "string") return 0;
+  const parts = value
+    .split(":")
+    .map((part) => Number.parseInt(part, 10))
+    .filter((part) => Number.isFinite(part));
+
+  if (parts.length === 0) return 0;
+  return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+function getBestThumbnailFromList(thumbnails = []) {
+  if (!Array.isArray(thumbnails) || thumbnails.length === 0) return "";
+  return (
+    [...thumbnails]
+      .sort((a, b) => (b.width ?? 0) - (a.width ?? 0))
+      .find((item) => item.url)?.url ?? ""
+  );
+}
+
+function toYoutubeTrackFromRenderer(renderer) {
+  const videoId = renderer.videoId;
+  const sourceUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : "";
+
+  return {
+    id: videoId,
+    title: getText(renderer.title) || "YouTube video",
+    artist:
+      getText(renderer.ownerText) ||
+      getText(renderer.longBylineText) ||
+      getText(renderer.shortBylineText) ||
+      "YouTube",
+    duration: parseDuration(getText(renderer.lengthText)),
+    coverUrl: getBestThumbnailFromList(renderer.thumbnail?.thumbnails),
+    audioUrl: sourceUrl,
+    sourceUrl,
+    source: "youtube",
+  };
+}
+
 function toYoutubeTrack(info) {
   const sourceUrl = getYoutubeSourceUrl(info);
 
@@ -137,6 +226,89 @@ function toYoutubeTrack(info) {
     sourceUrl,
     source: "youtube",
   };
+}
+
+function findJsonObjectAfter(html, marker) {
+  const markerIndex = html.indexOf(marker);
+  if (markerIndex < 0) return null;
+
+  const start = html.indexOf("{", markerIndex);
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < html.length; index += 1) {
+    const char = html[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return html.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractInitialData(html) {
+  const json =
+    findJsonObjectAfter(html, "var ytInitialData =") ??
+    findJsonObjectAfter(html, "window[\"ytInitialData\"] =") ??
+    findJsonObjectAfter(html, "ytInitialData =");
+
+  if (!json) {
+    const error = new Error("Không đọc được kết quả tìm kiếm YouTube.");
+    error.statusCode = 502;
+    throw error;
+  }
+
+  return JSON.parse(json);
+}
+
+function collectVideoRenderers(root) {
+  const renderers = [];
+  const stack = [root];
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object") continue;
+
+    if (node.videoRenderer?.videoId) {
+      renderers.push(node.videoRenderer);
+      continue;
+    }
+
+    if (Array.isArray(node)) {
+      for (const item of node) stack.push(item);
+      continue;
+    }
+
+    for (const value of Object.values(node)) {
+      if (value && typeof value === "object") stack.push(value);
+    }
+  }
+
+  return renderers;
 }
 
 function dedupeYoutubeTracks(tracks) {
@@ -155,33 +327,59 @@ function dedupeYoutubeTracks(tracks) {
 
 async function getYoutubeInfo(sourceUrl) {
   const normalizedUrl = normalizeYoutubeUrl(sourceUrl);
-  const info = await youtubeDl(normalizedUrl, {
-    dumpSingleJson: true,
-    noPlaylist: true,
-    skipDownload: true,
-    ffmpegLocation: getFfmpegDirectory(),
+  const canonicalUrl = getCanonicalYoutubeUrl(normalizedUrl);
+  const params = new URLSearchParams({
+    format: "json",
+    url: canonicalUrl,
   });
 
+  const response = await fetch(`${YOUTUBE_OEMBED_URL}?${params}`, {
+    headers: FETCH_HEADERS,
+  });
+
+  if (!response.ok) {
+    const error = new Error("Không lấy được thông tin video YouTube.");
+    error.statusCode = response.status === 404 ? 404 : 502;
+    throw error;
+  }
+
+  const info = await response.json();
+  const videoId = getYoutubeVideoId(canonicalUrl);
+
   return {
-    ...toYoutubeTrack(info),
-    sourceUrl: normalizedUrl,
-    audioUrl: normalizedUrl,
+    id: videoId,
+    title: info.title || "YouTube video",
+    artist: info.author_name || "YouTube",
+    duration: 0,
+    coverUrl:
+      info.thumbnail_url ||
+      (videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : ""),
+    audioUrl: canonicalUrl,
+    sourceUrl: canonicalUrl,
+    source: "youtube",
   };
 }
 
 async function runYoutubeSearch(searchTerm, limit) {
-  const result = await youtubeDl(`ytsearch${limit}:${searchTerm}`, {
-    dumpSingleJson: true,
-    skipDownload: true,
-    ignoreErrors: true,
-    noWarnings: true,
-    ffmpegLocation: getFfmpegDirectory(),
+  const params = new URLSearchParams({
+    search_query: searchTerm,
+    hl: "vi",
+  });
+  const response = await fetch(`${YOUTUBE_SEARCH_URL}?${params}`, {
+    headers: FETCH_HEADERS,
   });
 
-  const entries = Array.isArray(result.entries) ? result.entries : [];
-  return entries
-    .filter((item) => item?.id || item?.webpage_url)
-    .map(toYoutubeTrack)
+  if (!response.ok) {
+    const error = new Error("Không tìm kiếm được video YouTube.");
+    error.statusCode = 502;
+    throw error;
+  }
+
+  const html = await response.text();
+  const initialData = extractInitialData(html);
+  return collectVideoRenderers(initialData)
+    .slice(0, limit)
+    .map(toYoutubeTrackFromRenderer)
     .filter((item) => item.sourceUrl);
 }
 
@@ -265,6 +463,15 @@ function removeTempFiles(prefix) {
 
 async function streamYoutubeMp3(sourceUrl, res) {
   const normalizedUrl = normalizeYoutubeUrl(sourceUrl);
+  if (process.env.VERCEL) {
+    const error = new Error(
+      "Vercel không hỗ trợ chuyển YouTube thành MP3. Hãy phát bằng YouTube iframe.",
+    );
+    error.statusCode = 501;
+    throw error;
+  }
+
+  const youtubeDl = require("youtube-dl-exec");
   const tempPrefix = `lumi_yt_${Date.now()}_${randomUUID()}`;
   const tempBase = path.join(os.tmpdir(), tempPrefix);
   const outFile = `${tempBase}.mp3`;
