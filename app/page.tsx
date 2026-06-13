@@ -905,10 +905,13 @@ export default function Page() {
   const [background, setBackground] = useState(DEFAULT_BACKGROUND);
   const [dark, setDark] = useState(true);
   const [rain, setRain] = useState(true);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const [loadMoreNode, setLoadMoreNode] = useState<HTMLDivElement | null>(null);
   const loadingMoreBooksRef = useRef(false);
   const recommendedPageRef = useRef(1);
   const hasMoreRecommendedBooksRef = useRef(true);
+  const setLoadMoreElement = useCallback((node: HTMLDivElement | null) => {
+    setLoadMoreNode(node);
+  }, []);
 
   const savedBookIds = useMemo(
     () => new Set(libraryBooks.map((book) => book.id)),
@@ -1087,36 +1090,17 @@ export default function Page() {
   }, [activeTab, loadingData, refreshDiscover, user]);
 
   const isLoadMoreSentinelNearViewport = useCallback(() => {
-    const target = loadMoreRef.current;
-    if (!target) return false;
-    const rect = target.getBoundingClientRect();
+    if (!loadMoreNode) return false;
+    const rect = loadMoreNode.getBoundingClientRect();
     return rect.top <= window.innerHeight + 420;
-  }, []);
+  }, [loadMoreNode]);
 
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (!target || activeTab !== "discover" || !hasMoreRecommendedBooks) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          void loadMoreRecommendedBooks();
-        }
-      },
-      { rootMargin: "420px 0px" },
-    );
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [activeTab, hasMoreRecommendedBooks, loadMoreRecommendedBooks]);
-
-  useEffect(() => {
+  const requestLoadMoreCheck = useCallback(() => {
     if (
       activeTab !== "discover" ||
       loadingData ||
-      loadingMoreBooks ||
       loadingMoreBooksRef.current ||
-      !hasMoreRecommendedBooks ||
+      !hasMoreRecommendedBooksRef.current ||
       !isLoadMoreSentinelNearViewport()
     ) {
       return;
@@ -1125,12 +1109,71 @@ export default function Page() {
     void loadMoreRecommendedBooks();
   }, [
     activeTab,
-    books.length,
-    hasMoreRecommendedBooks,
     isLoadMoreSentinelNearViewport,
     loadingData,
-    loadingMoreBooks,
     loadMoreRecommendedBooks,
+  ]);
+
+  useEffect(() => {
+    if (
+      !loadMoreNode ||
+      activeTab !== "discover" ||
+      !hasMoreRecommendedBooks
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          requestLoadMoreCheck();
+        }
+      },
+      { rootMargin: "420px 0px" },
+    );
+
+    observer.observe(loadMoreNode);
+    return () => observer.disconnect();
+  }, [
+    activeTab,
+    hasMoreRecommendedBooks,
+    loadMoreNode,
+    requestLoadMoreCheck,
+  ]);
+
+  useEffect(() => {
+    requestLoadMoreCheck();
+  }, [books.length, loadMoreNode, requestLoadMoreCheck]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "discover" ||
+      !hasMoreRecommendedBooks ||
+      !loadMoreNode
+    ) {
+      return;
+    }
+
+    let frame = 0;
+    const scheduleCheck = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(requestLoadMoreCheck);
+    };
+
+    scheduleCheck();
+    window.addEventListener("scroll", scheduleCheck, { passive: true });
+    window.addEventListener("resize", scheduleCheck);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleCheck);
+      window.removeEventListener("resize", scheduleCheck);
+    };
+  }, [
+    activeTab,
+    hasMoreRecommendedBooks,
+    loadMoreNode,
+    requestLoadMoreCheck,
   ]);
 
   useEffect(() => {
@@ -1420,7 +1463,7 @@ export default function Page() {
                     />
                     {hasMoreRecommendedBooks && (
                       <div
-                        ref={loadMoreRef}
+                        ref={setLoadMoreElement}
                         className="flex min-h-16 items-center justify-center"
                       >
                         {loadingMoreBooks && (
