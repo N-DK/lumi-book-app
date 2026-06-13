@@ -19,6 +19,14 @@ const SPINES = [
   "oklch(0.38 0.06 260)",
 ];
 
+const BOOK_FILE_RETRY_DELAYS = [800, 1800];
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function normalizeCategories(value) {
   if (Array.isArray(value)) {
     return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))];
@@ -63,6 +71,98 @@ function buildRegexSearchFilter(searchText) {
       { categories: regex },
     ],
   };
+}
+
+function isCloudflareChallenge(detail) {
+  return /just a moment|checking your browser|cloudflare|cf-browser|cf-chl/i.test(
+    detail ?? "",
+  );
+}
+
+function isRetryableBookFileFailure(status, detail) {
+  if (isCloudflareChallenge(detail)) return false;
+  return status === 0 || [408, 425, 429, 500, 502, 503, 504].includes(status);
+}
+
+function isInvalidBookFileContentType(format, contentType) {
+  const normalized = String(contentType ?? "").toLowerCase();
+  if (!normalized) return false;
+
+  if (
+    normalized.includes("text/html") ||
+    normalized.includes("text/plain") ||
+    normalized.includes("application/json")
+  ) {
+    return true;
+  }
+
+  if (format === "epub") {
+    return (
+      !normalized.includes("application/epub+zip") &&
+      !normalized.includes("application/octet-stream") &&
+      !normalized.includes("application/zip")
+    );
+  }
+
+  if (format === "pdf") {
+    return (
+      !normalized.includes("application/pdf") &&
+      !normalized.includes("application/octet-stream")
+    );
+  }
+
+  return false;
+}
+
+function buildBookFileFailure(candidate, status, detail) {
+  const cleanDetail = String(detail ?? "").replace(/\s+/g, " ").trim();
+  const cloudflareChallenge = isCloudflareChallenge(cleanDetail);
+
+  return {
+    code: cloudflareChallenge ? "cloudflare_challenge" : "book_file_unavailable",
+    source: candidate.kind,
+    status,
+    detail: cleanDetail.slice(0, 180),
+    retryable: isRetryableBookFileFailure(status, cleanDetail),
+  };
+}
+
+async function fetchBookFileWithRetry(book, candidate) {
+  let lastFailure = null;
+
+  for (let attempt = 0; attempt <= BOOK_FILE_RETRY_DELAYS.length; attempt += 1) {
+    try {
+      const upstream = await fetchBookFile(book, candidate);
+
+      if (upstream.ok && upstream.body) {
+        return { upstream, failure: null };
+      }
+
+      const upstreamText = await upstream.text().catch(() => "");
+      lastFailure = buildBookFileFailure(
+        candidate,
+        upstream.status,
+        upstreamText,
+      );
+    } catch (error) {
+      lastFailure = buildBookFileFailure(
+        candidate,
+        0,
+        error instanceof Error ? error.message : "Unknown fetch error",
+      );
+    }
+
+    if (
+      !lastFailure.retryable ||
+      attempt >= BOOK_FILE_RETRY_DELAYS.length
+    ) {
+      break;
+    }
+
+    await wait(BOOK_FILE_RETRY_DELAYS[attempt]);
+  }
+
+  return { upstream: null, failure: lastFailure };
 }
 
 function buildBookPayload(body, seedIndex = 0) {
@@ -252,26 +352,20 @@ const downloadBook = asyncHandler(async (req, res) => {
   let lastFailure = null;
 
   for (const candidate of candidates) {
-    let upstream;
-
-    try {
-      upstream = await fetchBookFile(book, candidate);
-    } catch (error) {
-      lastFailure = {
-        source: candidate.kind,
-        status: 0,
-        detail: error instanceof Error ? error.message : "Unknown fetch error",
-      };
+    const { upstream, failure } = await fetchBookFileWithRetry(book, candidate);
+    if (!upstream) {
+      lastFailure = failure;
       continue;
     }
 
-    if (!upstream.ok || !upstream.body) {
+    const contentType = upstream.headers.get("content-type") ?? "";
+    if (isInvalidBookFileContentType(format, contentType)) {
       const upstreamText = await upstream.text().catch(() => "");
-      lastFailure = {
-        source: candidate.kind,
-        status: upstream.status,
-        detail: upstreamText.replace(/\s+/g, " ").trim().slice(0, 180),
-      };
+      lastFailure = buildBookFileFailure(
+        candidate,
+        upstream.status,
+        upstreamText || `Unexpected content type: ${contentType}`,
+      );
       continue;
     }
 
@@ -289,11 +383,16 @@ const downloadBook = asyncHandler(async (req, res) => {
     return;
   }
 
+  const blockedByCloudflare = lastFailure?.code === "cloudflare_challenge";
+  res.setHeader("Cache-Control", "no-store");
   res.status(502).json({
-    message:
-      "Không tải được file sách. Nguồn gốc đang chặn server production; hãy upload file lên object storage/CDN và cấu hình BOOK_FILE_BASE_URL.",
+    code: lastFailure?.code ?? "book_file_unavailable",
+    message: blockedByCloudflare
+      ? "Nguồn sách đang bật lớp bảo vệ Cloudflare nên LUMI chưa lấy được file từ server. Bạn có thể thử lại sau hoặc chờ file được đồng bộ lên kho lưu trữ."
+      : "Không tải được file sách lúc này. Vui lòng thử lại sau.",
     upstreamStatus: lastFailure?.status ?? 0,
     source: lastFailure?.source ?? "unknown",
+    retryable: lastFailure?.retryable ?? true,
     detail: lastFailure?.detail ?? "",
   });
 });

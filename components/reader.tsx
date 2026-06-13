@@ -23,6 +23,7 @@ import {
   Minus,
   Moon,
   Plus,
+  RefreshCw,
   ScrollText,
   Settings2,
   Sun,
@@ -57,6 +58,44 @@ export interface ReaderProgressUpdate {
 /* ---------- Reader themes (theo thiết kế LUMI) ---------- */
 type ReaderThemeKey = StoredReaderThemeKey;
 type ReaderMode = StoredReaderMode;
+
+interface ReaderErrorState {
+  title: string;
+  message: string;
+  canRetry: boolean;
+}
+
+interface BookFetchErrorPayload {
+  code?: unknown;
+  detail?: unknown;
+  message?: unknown;
+  retryable?: unknown;
+  upstreamStatus?: unknown;
+}
+
+class BookFileFetchError extends Error {
+  code?: string;
+  detail?: string;
+  retryable: boolean;
+  status?: number;
+
+  constructor(
+    message: string,
+    options: {
+      code?: string;
+      detail?: string;
+      retryable?: boolean;
+      status?: number;
+    } = {},
+  ) {
+    super(message);
+    this.name = "BookFileFetchError";
+    this.code = options.code;
+    this.detail = options.detail;
+    this.retryable = options.retryable ?? true;
+    this.status = options.status;
+  }
+}
 
 interface ReaderTheme {
   label: string;
@@ -570,6 +609,16 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Lỗi không xác định";
 }
 
+function getReaderErrorState(error: unknown, fileType: "PDF" | "EPUB") {
+  const isBookFileError = error instanceof BookFileFetchError;
+
+  return {
+    title: `Không đọc được ${fileType}`,
+    message: getErrorMessage(error),
+    canRetry: isBookFileError ? true : false,
+  };
+}
+
 function chunkText(text: string, limit = EPUB_PAGE_CHAR_LIMIT) {
   const chunks: string[] = [];
   let remaining = normalizeBookText(text);
@@ -668,7 +717,7 @@ async function readBookArrayBuffer(book: Book) {
   if (!book.fileUrl) throw new Error("Missing book file");
 
   const response = await fetch(book.fileUrl, { credentials: "include" });
-  if (!response.ok) throw new Error(await getBookFetchError(response));
+  if (!response.ok) throw await getBookFetchError(response);
   return response.arrayBuffer();
 }
 
@@ -677,17 +726,35 @@ async function getBookFetchError(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
-    const data = (await response.json().catch(() => null)) as {
-      message?: unknown;
-    } | null;
-    return typeof data?.message === "string" && data.message.trim()
-      ? data.message
-      : fallback;
+    const data = (await response.json().catch(() => null)) as
+      | BookFetchErrorPayload
+      | null;
+    const code = typeof data?.code === "string" ? data.code : undefined;
+    const detail = typeof data?.detail === "string" ? data.detail : undefined;
+    const status =
+      typeof data?.upstreamStatus === "number"
+        ? data.upstreamStatus
+        : response.status;
+    const retryable =
+      typeof data?.retryable === "boolean" ? data.retryable : true;
+    const message =
+      typeof data?.message === "string" && data.message.trim()
+        ? data.message
+        : fallback;
+
+    return new BookFileFetchError(message, {
+      code,
+      detail,
+      retryable,
+      status,
+    });
   }
 
   const text = await response.text().catch(() => "");
   const cleanText = text.replace(/\s+/g, " ").trim();
-  return cleanText ? cleanText.slice(0, 180) : fallback;
+  return new BookFileFetchError(cleanText ? cleanText.slice(0, 180) : fallback, {
+    status: response.status,
+  });
 }
 
 function getReaderPageCacheKey(book: Book, kind: "pdf" | "epub") {
@@ -1431,7 +1498,8 @@ function PdfReader(props: ReaderBodyProps) {
   const [status, setStatus] = useState(() =>
     cachedPages ? "" : "Đang mở PDF...",
   );
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReaderErrorState | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -1452,7 +1520,11 @@ function PdfReader(props: ReaderBodyProps) {
       setStatus("Đang mở PDF...");
 
       if (!book.fileUrl) {
-        setError("Không tìm thấy file PDF.");
+        setError({
+          title: "Không tìm thấy PDF",
+          message: "Sách này chưa có file PDF để đọc.",
+          canRetry: false,
+        });
         return;
       }
 
@@ -1511,7 +1583,7 @@ function PdfReader(props: ReaderBodyProps) {
       } catch (error) {
         console.error("PDF reader failed", error);
         if (!cancelled) {
-          setError(`Không đọc được PDF này: ${getErrorMessage(error)}`);
+          setError(getReaderErrorState(error, "PDF"));
           setStatus("");
         }
       }
@@ -1523,9 +1595,27 @@ function PdfReader(props: ReaderBodyProps) {
       void loadingTask?.destroy?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, book.fileUrl]);
+  }, [book.id, book.fileUrl, retryToken]);
 
-  if (error) return <ReaderStatus message={error} t={props.t} />;
+  if (error) {
+    return (
+      <ReaderStatus
+        title={error.title}
+        message={error.message}
+        t={props.t}
+        actionLabel={error.canRetry ? "Thử lại" : undefined}
+        onAction={
+          error.canRetry
+            ? () => {
+                setError(null);
+                setStatus("Đang thử lại...");
+                setRetryToken((value) => value + 1);
+              }
+            : undefined
+        }
+      />
+    );
+  }
   if (status) return <ReaderStatus message={status} t={props.t} />;
   return <ReaderBody {...props} pages={pages} />;
 }
@@ -1539,7 +1629,8 @@ function EpubReader(props: ReaderBodyProps) {
   const [status, setStatus] = useState(() =>
     cachedPages ? "" : "Đang mở EPUB...",
   );
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReaderErrorState | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -1559,7 +1650,11 @@ function EpubReader(props: ReaderBodyProps) {
       setStatus("Đang mở EPUB...");
 
       if (!book.fileUrl) {
-        setError("Không tìm thấy file EPUB.");
+        setError({
+          title: "Không tìm thấy EPUB",
+          message: "Sách này chưa có file EPUB để đọc.",
+          canRetry: false,
+        });
         return;
       }
 
@@ -1639,7 +1734,7 @@ function EpubReader(props: ReaderBodyProps) {
       } catch (error) {
         console.error("EPUB reader failed", error);
         if (!cancelled) {
-          setError(`Không đọc được EPUB này: ${getErrorMessage(error)}`);
+          setError(getReaderErrorState(error, "EPUB"));
           setStatus("");
         }
       }
@@ -1650,25 +1745,70 @@ function EpubReader(props: ReaderBodyProps) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, book.fileUrl]);
+  }, [book.id, book.fileUrl, retryToken]);
 
-  if (error) return <ReaderStatus message={error} t={props.t} />;
+  if (error) {
+    return (
+      <ReaderStatus
+        title={error.title}
+        message={error.message}
+        t={props.t}
+        actionLabel={error.canRetry ? "Thử lại" : undefined}
+        onAction={
+          error.canRetry
+            ? () => {
+                setError(null);
+                setStatus("Đang thử lại...");
+                setRetryToken((value) => value + 1);
+              }
+            : undefined
+        }
+      />
+    );
+  }
   if (status) return <ReaderStatus message={status} t={props.t} />;
   return <ReaderBody {...props} pages={pages} />;
 }
 
 /* ---------- Reader Status ---------- */
-function ReaderStatus({ message, t }: { message: string; t: ReaderTheme }) {
+function ReaderStatus({
+  actionLabel,
+  message,
+  onAction,
+  t,
+  title,
+}: {
+  actionLabel?: string;
+  message: string;
+  onAction?: () => void;
+  t: ReaderTheme;
+  title?: string;
+}) {
   return (
     <div className="flex h-full items-center justify-center p-8">
       <div
-        className="rounded-lg border px-10 py-6 text-sm"
+        className="max-w-md rounded-lg border px-8 py-6 text-center text-sm"
         style={{
           borderColor: t.rule,
-          color: t.muted,
+          color: t.text,
         }}
       >
-        {message}
+        {title && <p className="mb-2 text-base font-semibold">{title}</p>}
+        <p style={{ color: t.muted }}>{message}</p>
+        {actionLabel && onAction && (
+          <button
+            type="button"
+            onClick={onAction}
+            className="mt-5 inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs font-semibold transition hover:opacity-90"
+            style={{
+              backgroundColor: t.accent,
+              color: t.accentText,
+            }}
+          >
+            <RefreshCw className="size-3.5" />
+            {actionLabel}
+          </button>
+        )}
       </div>
     </div>
   );
