@@ -1030,9 +1030,8 @@ export default function Page() {
       return;
     }
 
-    const href = getTabHref("discover");
+    // Trang "/" hiển thị tab discover nhưng giữ nguyên URL "/", không redirect.
     setActiveTabState("discover");
-    window.history.replaceState({ tab: "discover" }, "", href);
   }, [pathname]);
 
   // Mở trang chi tiết khi truy cập thẳng URL /book/:id (hoặc điều hướng Next).
